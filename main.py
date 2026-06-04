@@ -13,6 +13,7 @@ from langgraph.errors import GraphRecursionError
 
 from loopguard.agent import build_agent
 from loopguard.detectors import LoopDetector, StallDetector
+from loopguard.metrics import Metrics
 from loopguard.monitor import Monitor
 
 
@@ -55,10 +56,13 @@ def main() -> None:
     except GraphRecursionError:
         print("⚠️  LangGraph's built-in recursion_limit tripped (LoopGuard would've caught it sooner).")
 
-    print("\n── Trace timeline ──")
+    print("\n-- Trace timeline --")
     print(monitor.tracer.timeline())
 
-    print("\n── Verdict ──")
+    print("\n-- Metrics --")
+    print(Metrics.from_events(monitor.tracer.events).report())
+
+    print("\n-- Verdict --")
     if interrupted:
         print("LoopGuard interrupted the agent: prompt loop detected. ✅")
     else:
