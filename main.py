@@ -1,72 +1,52 @@
-"""LoopGuard demo runner.
+"""LoopGuard CLI demo.
 
-Wires the three pillars together around the looping agent:
+Drives a looping agent through the shared runner and prints the streamed messages.
 
-    LangGraph agent  --stream-->  Monitor(Tracer + Detectors)  -->  interrupt + report
-
-Run:  python main.py
+Usage:
+    python main.py            # Type-B demo: identical tool loop (offline, no API key)
+    python main.py semantic   # Type-A demo: paraphrase loop (uses OpenAI embeddings)
 """
 
 from __future__ import annotations
 
-from langgraph.errors import GraphRecursionError
+import os
+import sys
 
-from loopguard.agent import build_agent
-from loopguard.detectors import LoopDetector, StallDetector
+from dotenv import load_dotenv
+
 from loopguard.metrics import Metrics
-from loopguard.monitor import Monitor
+from loopguard.runner import stream_run
+from loopguard.scenarios import get_scenario
 
-
-def tool_signature(tool: str, args: dict) -> str:
-    """Normalize a tool call into a canonical key (Type-B 'similar args' = normalized-equal)."""
-    norm = ", ".join(f"{k}={str(v).strip().lower()}" for k, v in sorted(args.items()))
-    return f"tool:{tool}({norm})"
+load_dotenv()  # picks up OPENAI_API_KEY from a .env file if present
 
 
 def main() -> None:
-    agent = build_agent()
-    monitor = Monitor(detectors=[LoopDetector(threshold=3), StallDetector(patience=4)])
+    name = sys.argv[1] if len(sys.argv) > 1 else "exact"
 
-    initial = {"goal": "find the weather", "steps": 0}
-    print("▶ Running agent under LoopGuard...\n")
+    if name == "semantic" and not os.getenv("OPENAI_API_KEY"):
+        print("Set OPENAI_API_KEY (e.g. in a .env file) to run the semantic scenario.")
+        return
 
-    interrupted = False
-    try:
-        # stream_mode="updates" yields {node_name: state_delta} for each node that runs.
-        for chunk in agent.stream(initial, stream_mode="updates", config={"recursion_limit": 50}):
-            for node, delta in chunk.items():
-                if node == "agent":
-                    tool, args = delta["last_tool"], delta["last_args"]
-                    sig = tool_signature(tool, args)
-                    action = f"decided: {tool}({args})"
-                elif node == "tools":
-                    sig = f"result:{delta['last_result']}"
-                    action = f"observed: {delta['last_result']}"
-                else:
-                    continue
+    title, agent, detectors = get_scenario(name)
+    print(f"\n=== {title} ===\nRunning agent under LoopGuard...\n")
 
-                alerts = monitor.observe(node, action, sig, **delta)
-                for a in alerts:
-                    flag = "🛑" if a.fatal else "⚠️ "
-                    print(f"{flag} [{a.detector}] {a.message}")
-
-            if monitor.should_interrupt:
-                interrupted = True
-                break
-    except GraphRecursionError:
-        print("⚠️  LangGraph's built-in recursion_limit tripped (LoopGuard would've caught it sooner).")
-
-    print("\n-- Trace timeline --")
-    print(monitor.tracer.timeline())
-
-    print("\n-- Metrics --")
-    print(Metrics.from_events(monitor.tracer.events).report())
-
-    print("\n-- Verdict --")
-    if interrupted:
-        print("LoopGuard interrupted the agent: prompt loop detected. ✅")
-    else:
-        print("Run finished without a fatal loop alert.")
+    for msg in stream_run(agent, detectors):
+        kind = msg["type"]
+        if kind == "event":
+            print(f"  [{msg['step']:>3}] {msg['node']:<7} | {msg['action']}")
+        elif kind == "alert":
+            flag = "STOP" if msg["fatal"] else "WARN"
+            print(f"[{flag}] [{msg['detector']}] {msg['message']}")
+        elif kind == "error":
+            print(f"[ERROR] {msg['message']}")
+        elif kind == "metrics":
+            print("\n-- Metrics --")
+            print(Metrics(**{k: v for k, v in msg.items() if k != "type"}).report())
+        elif kind == "done":
+            print("\n-- Verdict --")
+            print("LoopGuard interrupted the agent: loop detected." if msg["interrupted"]
+                  else "Run finished without a fatal loop alert.")
 
 
 if __name__ == "__main__":

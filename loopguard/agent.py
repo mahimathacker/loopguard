@@ -58,3 +58,32 @@ def build_agent(recursion_limit_guard: int = 50):
     graph.add_edge("tools", "agent")  # <-- the loop
     # Note: there is no edge to END. Nothing in the agent stops it; LoopGuard must.
     return graph.compile()
+
+
+# Different wordings, same intent. A strict signature check sees four *distinct* calls
+# and never flags a loop; semantic detection (Detector A) sees one repeated intent.
+PARAPHRASES = [
+    "weather in Paris",
+    "Paris weather today",
+    "current weather in Paris",
+    "what is the weather like in Paris right now",
+]
+
+
+def paraphrasing_agent_node(state: AgentState) -> dict:
+    """Scripted 'LLM' that rephrases the same failed search each turn instead of
+    repeating it verbatim. This is the paraphrase loop strict matching misses."""
+    i = state.get("steps", 0)
+    query = PARAPHRASES[i % len(PARAPHRASES)]
+    return {"last_tool": "search", "last_args": {"query": query}, "steps": i + 1}
+
+
+def build_paraphrasing_agent():
+    """Same graph as build_agent(), but the agent paraphrases instead of repeating."""
+    graph = StateGraph(AgentState)
+    graph.add_node("agent", paraphrasing_agent_node)
+    graph.add_node("tools", tools_node)
+    graph.add_edge(START, "agent")
+    graph.add_edge("agent", "tools")
+    graph.add_edge("tools", "agent")
+    return graph.compile()

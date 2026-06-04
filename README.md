@@ -22,8 +22,8 @@ cycle stops making progress and repeats. LoopGuard recognizes several flavors:
 
 | Type | Loop | Status |
 |---|---|---|
-| **B** | Same tool + similar args repeated ≥3× | **MVP - shipping first** |
-| **A** | Similar LLM decision/context repeated ("prompt loop") | Next (adds embeddings) |
+| **B** | Same tool + similar args repeated ≥3× | ✅ `LoopDetector` |
+| **A** | Similar LLM decision/context repeated ("prompt loop") | ✅ `SemanticLoopDetector` (OpenAI embeddings) |
 | **C** | Cyclic conversation / repeated message exchange | Powers the React Flow UI view |
 | **D** | Same node-path cycle in the graph | Later |
 
@@ -58,7 +58,15 @@ LangGraph agent ──stream──▶ Tracer ──events──▶ Monitor ─�
 
 ```bash
 pip install -r requirements.txt
-python main.py
+
+python main.py            # Type-B demo: identical tool loop (offline, no API key)
+python main.py semantic   # Type-A demo: paraphrase loop (needs OPENAI_API_KEY)
+
+# Streaming server (Phase 2)
+uvicorn server:app --reload
+#   GET /graph?scenario=exact|semantic  -> graph topology (nodes + edges)
+#   WS  /run?scenario=exact|semantic    -> live event/alert/metrics/done stream
 ```
 
 You'll see the trace timeline, then LoopGuard catching the agent looping and interrupting it.
+The semantic scenario needs an `OPENAI_API_KEY` (copy `.env.example` to `.env`).

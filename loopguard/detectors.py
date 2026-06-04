@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .embeddings import Embedder, OpenAIEmbedder, cosine
 from .tracer import Event
 
 
@@ -94,5 +95,64 @@ class StallDetector(Detector):
                 kind="stall",
                 message=f"No new information for {self.patience} consecutive observations.",
                 fatal=False,  # warn, don't necessarily kill
+            )
+        return None
+
+
+class SemanticLoopDetector(Detector):
+    """Type A: same *intent* repeated, even when the wording differs.
+
+    Strict LoopDetector misses an agent that rephrases the same failed approach
+    ("weather in Paris" -> "Paris weather today" -> "current weather in Paris"): the
+    signatures all differ, so the counter never climbs. This detector embeds the content
+    of each tool decision and flags when recent decisions are above a similarity
+    threshold, catching paraphrase loops.
+    """
+
+    name = "SemanticLoopDetector"
+
+    def __init__(
+        self,
+        embedder: Embedder | None = None,
+        threshold: float = 0.8,
+        window: int = 6,
+        min_repeats: int = 3,
+    ) -> None:
+        self.embedder = embedder or OpenAIEmbedder()
+        self.threshold = threshold
+        self.window = window
+        self.min_repeats = min_repeats
+
+    def _content(self, event: Event) -> str:
+        """The text we embed: the variable part of the decision (the tool args),
+        falling back to the human-readable action if no args are present."""
+        args = event.payload.get("last_args")
+        if isinstance(args, dict) and args:
+            return " ".join(str(v) for v in args.values())
+        return event.action
+
+    def inspect(self, event: Event, history: list[Event]) -> Alert | None:
+        if not event.signature.startswith("tool:"):
+            return None
+
+        current = self.embedder.encode(self._content(event))
+        recent = [
+            e for e in history[-self.window:]
+            if e.signature.startswith("tool:") and e is not event
+        ]
+        similar = sum(
+            1 for e in recent
+            if cosine(current, self.embedder.encode(self._content(e))) >= self.threshold
+        )
+
+        # similar counts the prior matches; +1 for the current decision itself.
+        if similar >= self.min_repeats - 1:
+            return Alert(
+                detector=self.name,
+                kind="semantic_loop",
+                message=(
+                    f"{similar + 1} semantically similar tool calls within the last "
+                    f"{self.window} steps (>= {self.threshold:.0%} similar) - a paraphrase loop."
+                ),
             )
         return None
