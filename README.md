@@ -5,13 +5,13 @@
 LoopGuard wraps a LangGraph run and gives you full visibility into what the agent is
 doing: it **traces** every step, surfaces live **metrics**, and runs **detectors** that
 catch pathological behavior at runtime. Catching agents stuck in **prompt loops** is the
-flagship capability — but LoopGuard is the whole observability layer, not just a loop detector.
+flagship capability - but LoopGuard is the whole observability layer, not just a loop detector.
 
 ## Three pillars
 
 | Pillar | What it does | Module |
 |---|---|---|
-| **Tracing** | Records every node execution as a stream of `Event`s — the ordered stream *is* the trace | `loopguard/tracer.py` |
+| **Tracing** | Records every node execution as a stream of `Event`s - the ordered stream *is* the trace | `loopguard/tracer.py` |
 | **Observability** | Derives metrics from the trace (steps, tool-call frequency, repeats) | `loopguard/metrics.py` |
 | **Runtime monitoring** | A live `Monitor` runs pluggable **detectors** over the event stream and can interrupt the agent | `loopguard/monitor.py`, `loopguard/detectors.py` |
 
@@ -22,7 +22,7 @@ cycle stops making progress and repeats. LoopGuard recognizes several flavors:
 
 | Type | Loop | Status |
 |---|---|---|
-| **B** | Same tool + similar args repeated ≥3× | **MVP — shipping first** |
+| **B** | Same tool + similar args repeated ≥3× | **MVP - shipping first** |
 | **A** | Similar LLM decision/context repeated ("prompt loop") | Next (adds embeddings) |
 | **C** | Cyclic conversation / repeated message exchange | Powers the React Flow UI view |
 | **D** | Same node-path cycle in the graph | Later |

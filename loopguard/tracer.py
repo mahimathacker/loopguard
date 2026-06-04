@@ -7,7 +7,7 @@ Defines what a *trace* is in LoopGuard, from first principles:
 
 Every time a LangGraph node runs, the Tracer records an Event. The ordered list of
 Events IS the trace. Both the Metrics layer and the runtime Monitor read this same
-stream — and it's also the exact payload a React Flow UI would consume later.
+stream - and it's also the exact payload a React Flow UI would consume later.
 """
 
 from __future__ import annotations

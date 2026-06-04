@@ -1,10 +1,10 @@
-"""RUNTIME-MONITORING pillar — the detectors.
+"""RUNTIME-MONITORING pillar - the detectors.
 
 A Detector inspects each new Event (with the trace history available) and optionally
 returns an Alert. The Monitor runs every registered detector on every event.
 
 LoopDetector (Type B) is the MVP headliner. StallDetector and ToolStormDetector are
-included to prove the framework is general — LoopGuard is an observability layer with
+included to prove the framework is general - LoopGuard is an observability layer with
 pluggable checks, not a single-purpose loop detector.
 """
 
@@ -43,7 +43,7 @@ class LoopDetector(Detector):
 
     We only look at tool-call events (signatures starting with "tool:"). Within a
     sliding window of recent events, if one tool signature recurs `threshold` times,
-    the agent is stuck calling the same thing — that's a loop.
+    the agent is stuck calling the same thing - that's a loop.
     """
 
     name = "LoopDetector"

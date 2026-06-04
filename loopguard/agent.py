@@ -30,7 +30,7 @@ class AgentState(TypedDict):
 
 
 # The query the broken agent fixates on. A healthy agent would change tactics after
-# seeing "no results"; ours doesn't — that's the bug LoopGuard is here to surface.
+# seeing "no results"; ours doesn't - that's the bug LoopGuard is here to surface.
 STUCK_QUERY = {"query": "weather in Paris"}
 
 

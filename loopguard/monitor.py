@@ -1,11 +1,11 @@
-"""RUNTIME-MONITORING pillar — the Monitor.
+"""RUNTIME-MONITORING pillar - the Monitor.
 
 The Monitor is the live nerve center. As the agent streams events, the Monitor:
   1. records each Event in the Tracer (tracing),
   2. runs every registered Detector against it (runtime monitoring),
   3. collects any Alerts and decides whether to interrupt the run.
 
-It deliberately knows nothing about LangGraph internals — it just consumes Events.
+It deliberately knows nothing about LangGraph internals - it just consumes Events.
 That keeps it reusable for any agent framework and for the React Flow UI later.
 """
 
@@ -34,5 +34,5 @@ class Monitor:
 
     @property
     def should_interrupt(self) -> bool:
-        """True once any fatal alert has fired — runtime intervention signal."""
+        """True once any fatal alert has fired - runtime intervention signal."""
         return any(a.fatal for a in self.alerts)
