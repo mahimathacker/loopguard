@@ -31,7 +31,7 @@ def get_scenario(name: str) -> tuple[str, object, list[Detector], dict]:
     """Return (title, compiled_agent, detectors, initial_input) for a scenario name."""
     if name == "semantic":
         return (
-            "Scripted: paraphrase loop (Type A)",
+            "Scripted: paraphrase loop",
             build_paraphrasing_agent(),
             [LoopDetector(threshold=3), SemanticLoopDetector(threshold=0.8), StallDetector(patience=4)],
             WEATHER_INPUT,
@@ -51,7 +51,7 @@ def get_scenario(name: str) -> tuple[str, object, list[Detector], dict]:
             {"messages": [{"role": "user", "content": TRAP_TASK}]},
         )
     return (
-        "Scripted: identical tool loop (Type B)",
+        "Scripted: identical tool loop",
         build_agent(),
         [LoopDetector(threshold=3), StallDetector(patience=4)],
         WEATHER_INPUT,

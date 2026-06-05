@@ -3,8 +3,8 @@
 Drives a looping agent through the shared runner and prints the streamed messages.
 
 Usage:
-    python main.py            # Type-B demo: identical tool loop (offline, no API key)
-    python main.py semantic   # Type-A demo: paraphrase loop (uses OpenAI embeddings)
+    python main.py            # identical tool loop (offline, no API key)
+    python main.py semantic   # paraphrase loop (uses OpenAI embeddings)
 """
 
 from __future__ import annotations

@@ -3,7 +3,7 @@
 This is the *subject* LoopGuard monitors. It uses no real LLM (so it runs offline and
 deterministically): the "agent" node follows a scripted policy that keeps deciding to
 call the same tool with the same args, and the "tool" node keeps returning "no results".
-That is exactly the Type-B loop the MVP detector should catch.
+That is exactly the identical-call loop the detector should catch.
 
 Graph shape (the cycle is the `tools -> agent` edge):
 

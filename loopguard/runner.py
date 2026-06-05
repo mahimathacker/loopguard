@@ -25,7 +25,7 @@ from .monitor import Monitor
 
 
 def tool_signature(tool: str, args: dict) -> str:
-    """Normalize a tool call into a canonical key (Type-B 'similar args' = normalized-equal)."""
+    """Normalize a tool call into a canonical key ('similar args' = normalized-equal)."""
     norm = ", ".join(f"{k}={str(v).strip().lower()}" for k, v in sorted(args.items()))
     return f"tool:{tool}({norm})"
 

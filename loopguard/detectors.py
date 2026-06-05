@@ -3,9 +3,9 @@
 A Detector inspects each new Event (with the trace history available) and optionally
 returns an Alert. The Monitor runs every registered detector on every event.
 
-LoopDetector (Type B) is the MVP headliner. StallDetector and ToolStormDetector are
-included to prove the framework is general - LoopGuard is an observability layer with
-pluggable checks, not a single-purpose loop detector.
+LoopDetector is the flagship. StallDetector is included to prove the framework is
+general - LoopGuard is an observability layer with pluggable checks, not a single-purpose
+loop detector.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class Detector:
 
 
 class LoopDetector(Detector):
-    """Type B: same tool + similar args repeated >= threshold times.
+    """Same tool and similar args repeated >= threshold times.
 
     We only look at tool-call events (signatures starting with "tool:"). Within a
     sliding window of recent events, if one tool signature recurs `threshold` times,
@@ -100,7 +100,7 @@ class StallDetector(Detector):
 
 
 class SemanticLoopDetector(Detector):
-    """Type A: same *intent* repeated, even when the wording differs.
+    """Same *intent* repeated, even when the wording differs.
 
     Strict LoopDetector misses an agent that rephrases the same failed approach
     ("weather in Paris" -> "Paris weather today" -> "current weather in Paris"): the
