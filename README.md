@@ -46,14 +46,14 @@ quick, deterministic test). Two use a real `gpt-4o-mini` agent with real tools.
 A scripted agent calls the same tool with the same arguments every step. `LoopDetector`
 catches it on the third call.
 
-![Identical tool loop](public/scriptedtool.png)
+![Identical tool loop](ui/public/scriptedtool.png)
 
 ### 2. Scripted: paraphrase loop
 
 A scripted agent asks the same thing in different words each step. Exact matching sees
 distinct calls and misses it, but `SemanticLoopDetector` catches the repeated intent.
 
-![Paraphrase loop](public/scriptedopenai.png)
+![Paraphrase loop](ui/public/scriptedopenai.png)
 
 ### 3. Real agent: solvable task
 
@@ -61,7 +61,7 @@ A real `gpt-4o-mini` agent gets a question it can answer. It uses the calculator
 returns the answer, and finishes. LoopGuard stays quiet and just shows the trace and
 metrics of a healthy run.
 
-![Real agent finishing](public/realagentmath.png)
+![Real agent finishing](ui/public/realagentmath.png)
 
 ### 4. Real agent: impossible goal
 
@@ -69,7 +69,7 @@ A real agent is given a goal it cannot reach (find a source for a claim that is 
 It searches the web on its own, again and again, with different queries. Nothing is faked,
 the loop comes from the situation. `SemanticLoopDetector` catches it and stops the run.
 
-![Real agent caught in a loop](public/realagentloop.png)
+![Real agent caught in a loop](ui/public/realagentloop.png)
 
 ## Tech stack
 
