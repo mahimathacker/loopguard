@@ -1,72 +1,184 @@
 # LoopGuard
 
-**An observability & runtime-monitoring layer for LangGraph agents.**
+An observability and runtime-monitoring layer for LangGraph agents. LoopGuard traces
+every step an agent takes, shows live metrics, and runs detectors that catch agents stuck
+in loops, then stops them before they waste time and tokens.
 
-LoopGuard wraps a LangGraph run and gives you full visibility into what the agent is
-doing: it **traces** every step, surfaces live **metrics**, and runs **detectors** that
-catch pathological behavior at runtime. Catching agents stuck in **prompt loops** is the
-flagship capability - but LoopGuard is the whole observability layer, not just a loop detector.
+It works on the demo agents in this repo and on your own LangGraph agent.
 
-## Three pillars
+## Why this exists
 
-| Pillar | What it does | Module |
-|---|---|---|
-| **Tracing** | Records every node execution as a stream of `Event`s - the ordered stream *is* the trace | `loopguard/tracer.py` |
-| **Observability** | Derives metrics from the trace (steps, tool-call frequency, repeats) | `loopguard/metrics.py` |
-| **Runtime monitoring** | A live `Monitor` runs pluggable **detectors** over the event stream and can interrupt the agent | `loopguard/monitor.py`, `loopguard/detectors.py` |
+LLM agents run in a loop: think, act, observe, repeat. Sometimes that loop goes wrong and
+the agent keeps doing the same thing without making progress. It might call the same tool
+over and over, or rephrase the same failed request again and again. Left alone, it burns
+tokens and time and never finishes. LoopGuard watches the agent while it runs and steps in
+when this happens.
 
-## What "prompt loop" means
+## How it works
 
-An agent runs a cycle: think (LLM) → act (tool) → observe → think → … A *loop* is when this
-cycle stops making progress and repeats. LoopGuard recognizes several flavors:
+LoopGuard has three parts, one for each job:
 
-| Type | Loop | Status |
-|---|---|---|
-| **B** | Same tool + similar args repeated ≥3× | ✅ `LoopDetector` |
-| **A** | Similar LLM decision/context repeated ("prompt loop") | ✅ `SemanticLoopDetector` (OpenAI embeddings) |
-| **C** | Cyclic conversation / repeated message exchange | Powers the React Flow UI view |
-| **D** | Same node-path cycle in the graph | Later |
+| Part | Job | File |
+|------|-----|------|
+| Tracer | Records every step as an event. The ordered list of events is the trace. | `loopguard/tracer.py` |
+| Metrics | Turns the trace into numbers: total steps, tool calls, repeat rate. | `loopguard/metrics.py` |
+| Monitor | Runs detectors over the live trace and interrupts the agent when one fires. | `loopguard/monitor.py`, `loopguard/detectors.py` |
 
-## Detection rule (MVP, Type B)
-
-> Normalize each tool call to `tool(name, args)`. If the same normalized signature
-> appears **≥ 3 times** within a sliding window, raise a **loop alert** and interrupt the run.
-
-Threshold and window are configurable. "Similar args" today means normalized-equal
-(trim / lowercase / sorted keys); fuzzy similarity arrives with Detector A.
-
-## Architecture
+The flow is one direction:
 
 ```
-LangGraph agent ──stream──▶ Tracer ──events──▶ Monitor ──┬─▶ LoopDetector   (Type B)
-                            (trace)            (runtime)  ├─▶ StallDetector
-                                                          └─▶ ToolStormDetector
-                                                              │
-                              Metrics ◀──reads trace──────────┘
-                                                              │
-                                                   alerts ──▶ interrupt / log / (React Flow UI)
+LangGraph agent --stream--> Tracer --events--> Monitor --> detectors --> alert --> interrupt
 ```
 
-## Stack
+There are two detectors today:
 
-- **Agent + detector + tracing:** Python, [LangGraph](https://github.com/langchain-ai/langgraph)
-- **Transport (later):** FastAPI + WebSocket/SSE
-- **UI (later):** React + React Flow + Vite (TypeScript)
-- **Semantic detection (later):** sentence-transformers
+- `LoopDetector`: catches the same tool call with the same arguments repeated three times.
+- `SemanticLoopDetector`: catches the same intent repeated in different words, using OpenAI
+  embeddings. This catches loops that exact matching misses.
+
+## The four scenarios
+
+LoopGuard ships with four runnable scenarios. Two are scripted and offline (good for a
+quick, deterministic test). Two use a real `gpt-4o-mini` agent with real tools.
+
+### 1. Scripted: identical tool loop
+
+A scripted agent calls the same tool with the same arguments every step. `LoopDetector`
+catches it on the third call.
+
+![Identical tool loop](public/exact.png)
+
+### 2. Scripted: paraphrase loop
+
+A scripted agent asks the same thing in different words each step. Exact matching sees
+distinct calls and misses it, but `SemanticLoopDetector` catches the repeated intent.
+
+![Paraphrase loop](public/semantic.png)
+
+### 3. Real agent: solvable task
+
+A real `gpt-4o-mini` agent gets a question it can answer. It uses the calculator tool,
+returns the answer, and finishes. LoopGuard stays quiet and just shows the trace and
+metrics of a healthy run.
+
+![Real agent finishing](public/calc.png)
+
+### 4. Real agent: impossible goal
+
+A real agent is given a goal it cannot reach (find a source for a claim that is not true).
+It searches the web on its own, again and again, with different queries. Nothing is faked,
+the loop comes from the situation. `SemanticLoopDetector` catches it and stops the run.
+
+![Real agent caught in a loop](public/trap.png)
+
+## Tech stack
+
+| Layer | Tool |
+|-------|------|
+| Agent runtime | Python, [LangGraph](https://github.com/langchain-ai/langgraph) |
+| Real LLM agent | `gpt-4o-mini` via `langchain-openai` |
+| Web search tool | DuckDuckGo via `ddgs` (no API key) |
+| Semantic detection | OpenAI embeddings (`text-embedding-3-small`) |
+| API server | FastAPI + WebSocket |
+| UI | Next.js + React Flow + Tailwind CSS (in `ui/`) |
+
+## Requirements
+
+- Python 3.11 or newer. The macOS system Python 3.9 uses an old SSL library and is not
+  supported, use a virtual environment on a newer Python.
+- Node.js 18 or newer (for the UI).
+- An OpenAI API key for the `semantic`, `calc`, and `trap` scenarios. The `exact` scenario
+  runs offline with no key.
+
+## Setup
+
+### 1. Backend (Python)
+
+```bash
+cd agent-loop
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. API key
+
+```bash
+cp .env.example .env
+# open .env and set OPENAI_API_KEY=sk-...
+```
+
+### 3. UI (Node)
+
+```bash
+cd ui
+npm install
+```
 
 ## Run
 
+Run the backend and the UI in two terminals.
+
+### Terminal 1: API server
+
 ```bash
-pip install -r requirements.txt
-
-python main.py            # Type-B demo: identical tool loop (offline, no API key)
-python main.py semantic   # Type-A demo: paraphrase loop (needs OPENAI_API_KEY)
-
-# Streaming server (Phase 2)
-uvicorn server:app --reload
-#   GET /graph?scenario=exact|semantic  -> graph topology (nodes + edges)
-#   WS  /run?scenario=exact|semantic    -> live event/alert/metrics/done stream
+source .venv/bin/activate
+uvicorn server:app --reload --port 8000
 ```
 
-You'll see the trace timeline, then LoopGuard catching the agent looping and interrupting it.
-The semantic scenario needs an `OPENAI_API_KEY` (copy `.env.example` to `.env`).
+### Terminal 2: UI
+
+```bash
+cd ui
+npm run dev
+```
+
+Open http://localhost:3000, pick a scenario from the dropdown, and press Run.
+
+### Command line (no UI)
+
+You can also run any scenario straight from the terminal:
+
+```bash
+python main.py            # exact   (offline, no key)
+python main.py semantic   # semantic
+python main.py calc       # real agent, finishes
+python main.py trap       # real agent, loops and gets caught
+```
+
+## Use LoopGuard on your own agent
+
+LoopGuard is not tied to these demos. Wrap any compiled LangGraph agent and read the
+stream of messages it produces:
+
+```python
+from loopguard import stream_run
+from loopguard.detectors import LoopDetector, SemanticLoopDetector
+
+for msg in stream_run(my_agent, [LoopDetector(), SemanticLoopDetector()], my_input):
+    if msg["type"] == "alert" and msg["fatal"]:
+        print("loop detected:", msg["message"])  # the run is interrupted right after
+```
+
+`stream_run` works with both classic state-dict agents and message-based ReAct agents. It
+yields `event`, `alert`, `metrics`, and `done` messages that you can log, store, or render.
+
+## Project structure
+
+```
+agent-loop/
+  loopguard/          the library
+    tracer.py         records events (the trace)
+    metrics.py        derives numbers from the trace
+    detectors.py      LoopDetector, SemanticLoopDetector, StallDetector
+    monitor.py        runs detectors over the live trace
+    embeddings.py     OpenAI embeddings for semantic detection
+    agent.py          demo agents (scripted) and the real gpt-4o-mini agent
+    scenarios.py      the four named scenarios
+    runner.py         drives a run and streams messages (the public API)
+  server.py           FastAPI server: /graph and /run (WebSocket)
+  main.py             command line runner
+  ui/                 Next.js + React Flow front end
+  public/             README screenshots
+  requirements.txt    Python dependencies
+```

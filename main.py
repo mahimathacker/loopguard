@@ -21,17 +21,21 @@ from loopguard.scenarios import get_scenario
 load_dotenv()  # picks up OPENAI_API_KEY from a .env file if present
 
 
+NEEDS_KEY = {"semantic", "calc", "trap"}
+
+
 def main() -> None:
     name = sys.argv[1] if len(sys.argv) > 1 else "exact"
 
-    if name == "semantic" and not os.getenv("OPENAI_API_KEY"):
-        print("Set OPENAI_API_KEY (e.g. in a .env file) to run the semantic scenario.")
+    if name in NEEDS_KEY and not os.getenv("OPENAI_API_KEY"):
+        print(f"Set OPENAI_API_KEY (e.g. in a .env file) to run the '{name}' scenario.")
         return
 
-    title, agent, detectors = get_scenario(name)
+    title, agent, detectors, initial = get_scenario(name)
+    recursion_limit = 30 if name in {"calc", "trap"} else 50
     print(f"\n=== {title} ===\nRunning agent under LoopGuard...\n")
 
-    for msg in stream_run(agent, detectors):
+    for msg in stream_run(agent, detectors, initial, recursion_limit):
         kind = msg["type"]
         if kind == "event":
             print(f"  [{msg['step']:>3}] {msg['node']:<7} | {msg['action']}")

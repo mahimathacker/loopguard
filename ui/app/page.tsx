@@ -22,8 +22,10 @@ const API = process.env.NEXT_PUBLIC_LOOPGUARD_API ?? "http://localhost:8000";
 const WS = API.replace(/^http/, "ws");
 
 const SCENARIOS: { value: Scenario; label: string }[] = [
-  { value: "exact", label: "Type B: identical tool loop" },
-  { value: "semantic", label: "Type A: paraphrase loop (OpenAI)" },
+  { value: "exact", label: "Scripted: identical tool loop" },
+  { value: "semantic", label: "Scripted: paraphrase loop (OpenAI)" },
+  { value: "calc", label: "Real agent: solvable task (finishes)" },
+  { value: "trap", label: "Real agent: impossible goal (loops)" },
 ];
 
 // Fixed positions for the two known nodes; anything else gets staggered.

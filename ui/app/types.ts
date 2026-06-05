@@ -40,4 +40,4 @@ export interface ErrorMsg {
 
 export type ServerMessage = EventMsg | AlertMsg | MetricsMsg | DoneMsg | ErrorMsg;
 
-export type Scenario = "exact" | "semantic";
+export type Scenario = "exact" | "semantic" | "calc" | "trap";

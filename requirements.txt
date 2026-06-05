@@ -9,3 +9,7 @@ python-dotenv>=1.0.0
 # Streaming API (Phase 2)
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
+
+# Real agent (gpt-4o-mini + real web search)
+langchain-openai>=0.2.0
+ddgs>=9.0.0

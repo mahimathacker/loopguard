@@ -57,7 +57,7 @@ def graph_topology(agent) -> dict:
 
 @app.get("/graph")
 def graph(scenario: str = "exact") -> dict:
-    _, agent, _ = get_scenario(scenario)
+    _, agent, _, _ = get_scenario(scenario)
     return graph_topology(agent)
 
 
@@ -65,10 +65,11 @@ def graph(scenario: str = "exact") -> dict:
 async def run(websocket: WebSocket) -> None:
     await websocket.accept()
     scenario = websocket.query_params.get("scenario", "exact")
-    _, agent, detectors = get_scenario(scenario)
+    _, agent, detectors, initial = get_scenario(scenario)
+    recursion_limit = 30 if scenario in {"calc", "trap"} else 50
 
     try:
-        for message in stream_run(agent, detectors):
+        for message in stream_run(agent, detectors, initial, recursion_limit):
             await websocket.send_json(message)
             await asyncio.sleep(STEP_DELAY_SECONDS)
         await websocket.close()
