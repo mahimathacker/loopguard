@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from loopguard.detectors import LoopDetector
+from loopguard.evals import evaluate, loop_dataset
 from loopguard.runner import stream_run
 from loopguard.scenarios import get_scenario
 
