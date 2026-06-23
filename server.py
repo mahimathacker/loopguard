@@ -63,6 +63,21 @@ def graph(scenario: str = "exact") -> dict:
     return graph_topology(agent)
 
 
+@app.get("/eval")
+def eval_detectors() -> dict:
+    """Grade the LoopDetector on the labeled dataset and return its scorecard for the UI."""
+    cases = loop_dataset()
+    card = evaluate(cases, [LoopDetector(threshold=3)])
+    return {
+        "detector": "LoopDetector",
+        "cases": len(cases),
+        "tp": card.tp, "fp": card.fp, "fn": card.fn, "tn": card.tn,
+        "precision": round(card.precision, 2),
+        "recall": round(card.recall, 2),
+        "f1": round(card.f1, 2),
+    }
+
+
 @app.websocket("/run")
 async def run(websocket: WebSocket) -> None:
     await websocket.accept()

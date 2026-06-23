@@ -41,3 +41,16 @@ export interface ErrorMsg {
 export type ServerMessage = EventMsg | AlertMsg | MetricsMsg | DoneMsg | ErrorMsg;
 
 export type Scenario = "exact" | "semantic" | "calc" | "trap";
+
+// Detector accuracy scorecard from the /eval endpoint. Mirrors loopguard/evals.py.
+export interface EvalScore {
+  detector: string;
+  cases: number;
+  tp: number;
+  fp: number;
+  fn: number;
+  tn: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}

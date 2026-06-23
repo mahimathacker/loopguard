@@ -16,7 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { MetricsMsg, Scenario, ServerMessage } from "./types";
+import type { EvalScore, MetricsMsg, Scenario, ServerMessage } from "./types";
 
 const API = process.env.NEXT_PUBLIC_LOOPGUARD_API ?? "http://localhost:8000";
 const WS = API.replace(/^http/, "ws");
@@ -82,6 +82,7 @@ export default function Page() {
   const [fatalAlert, setFatalAlert] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [evalScore, setEvalScore] = useState<EvalScore | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -127,6 +128,14 @@ export default function Page() {
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [log]);
+
+  // Load the detector accuracy scorecard once, on mount. Independent of any run.
+  useEffect(() => {
+    fetch(`${API}/eval`)
+      .then((res) => res.json() as Promise<EvalScore>)
+      .then(setEvalScore)
+      .catch(() => setEvalScore(null));
+  }, []);
 
   function highlightActive(active: string) {
     setNodes((prev) =>
@@ -317,6 +326,30 @@ export default function Page() {
         </div>
 
         <aside className="flex min-h-0 w-[27rem] flex-col border-l border-slate-800 bg-slate-950">
+          <section className="border-b border-slate-800 p-5">
+            <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Detector accuracy
+            </h2>
+            {evalScore ? (
+              <>
+                <dl className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
+                  <dt className="text-slate-400">precision</dt>
+                  <dd className="text-right font-mono text-emerald-300">{evalScore.precision.toFixed(2)}</dd>
+                  <dt className="text-slate-400">recall</dt>
+                  <dd className="text-right font-mono text-amber-300">{evalScore.recall.toFixed(2)}</dd>
+                  <dt className="text-slate-400">f1</dt>
+                  <dd className="text-right font-mono text-slate-100">{evalScore.f1.toFixed(2)}</dd>
+                </dl>
+                <p className="mt-3 font-mono text-[0.7rem] text-slate-500">
+                  {evalScore.detector} · {evalScore.cases} cases · tp={evalScore.tp} fp={evalScore.fp}{" "}
+                  fn={evalScore.fn} tn={evalScore.tn}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Scorecard unavailable.</p>
+            )}
+          </section>
+
           <section className="border-b border-slate-800 p-5">
             <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Metrics</h2>
             {metrics ? (
