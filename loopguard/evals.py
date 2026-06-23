@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .detectors import Detector
 from .monitor import Monitor
-from .runner import tool_signature
+from .runner import stream_run, tool_signature
 
 
 @dataclass
@@ -91,6 +91,39 @@ def loop_dataset() -> list[EvalCase]:
     ]
 
 
+def convergence_score(step_counts: list[int]) -> float:
+    """How close the agent stays to its own best (shortest) path across similar runs.
+
+    Course formula:  (1/N) * sum_i  min(1, S_optimal / S_agent_i)
+    S_optimal is the fewest steps any run took. 1.0 means every run was as short as the
+    best one (always the optimal path); lower means some runs wandered with extra steps.
+    """
+    runs = [s for s in step_counts if s > 0]  # drop empty runs so we never divide by zero
+    if not runs:
+        return 0.0
+
+    optimal = min(runs)                              # S_optimal: the shortest run we saw
+    ratios = [min(1.0, optimal / s) for s in runs]   # each run scored 0..1 vs that best run
+    return sum(ratios) / len(ratios)                 # average = overall convergence
+
+
+def step_counts_for(agent, detectors: list[Detector], inputs: list[dict]) -> list[int]:
+    """Run the agent once per input and collect total_steps for each run.
+
+    These counts ARE the S_agent_i in convergence_score. We read total_steps straight from
+    the 'metrics' message stream_run already emits, so this is just observing real runs.
+    Requires whatever the agent needs (e.g. OPENAI_API_KEY for the real ReAct agent).
+    """
+    counts: list[int] = []
+    for initial in inputs:
+        steps = 0
+        for msg in stream_run(agent, detectors, initial):
+            if msg["type"] == "metrics":
+                steps = msg["total_steps"]  # the final tally for this run
+        counts.append(steps)
+    return counts
+
+
 def evaluate(cases: list[EvalCase], detectors: list[Detector]) -> Scorecard:
     """Replay every case, compare the prediction to the label, tally the confusion matrix."""
     card = Scorecard()
@@ -121,3 +154,10 @@ if __name__ == "__main__":
     print(f"  precision : {card.precision:.2f}")
     print(f"  recall    : {card.recall:.2f}")
     print(f"  f1        : {card.f1:.2f}")
+
+    # Convergence: feed in step counts from several similar runs.
+    perfect = [3, 3, 3, 3]      # every run took the optimal 3 steps
+    wandering = [3, 5, 8, 3]    # two optimal, two that took extra steps
+    print("\nConvergence score (1.0 = always optimal path):")
+    print(f"  all runs optimal [3,3,3,3]   : {convergence_score(perfect):.2f}")
+    print(f"  some runs wander [3,5,8,3]   : {convergence_score(wandering):.2f}")
