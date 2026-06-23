@@ -91,6 +91,17 @@ def loop_dataset() -> list[EvalCase]:
     ]
 
 
+def compare_detectors(
+    cases: list[EvalCase], detector_sets: dict[str, list[Detector]]
+) -> dict[str, Scorecard]:
+    """Grade several detector line-ups on the SAME cases, for a side-by-side comparison.
+
+    The point: prove whether adding a detector (e.g. SemanticLoopDetector) actually lifts
+    recall without wrecking precision - i.e. whether it earns its extra cost.
+    """
+    return {name: evaluate(cases, detectors) for name, detectors in detector_sets.items()}
+
+
 def convergence_score(step_counts: list[int]) -> float:
     """How close the agent stays to its own best (shortest) path across similar runs.
 
@@ -161,3 +172,23 @@ if __name__ == "__main__":
     print("\nConvergence score (1.0 = always optimal path):")
     print(f"  all runs optimal [3,3,3,3]   : {convergence_score(perfect):.2f}")
     print(f"  some runs wander [3,5,8,3]   : {convergence_score(wandering):.2f}")
+
+    # Side-by-side: does adding the semantic detector lift recall? Needs OPENAI_API_KEY,
+    # so we skip it gracefully when no key is set (keeps the rest of this demo offline).
+    import os
+
+    from dotenv import load_dotenv
+
+    load_dotenv()  # pick up OPENAI_API_KEY from a .env file, as the server does
+    if os.getenv("OPENAI_API_KEY"):
+        from .detectors import SemanticLoopDetector
+
+        print("\nDetector comparison (same dataset):")
+        sets = {
+            "exact only      ": [LoopDetector(threshold=3)],
+            "exact + semantic": [LoopDetector(threshold=3), SemanticLoopDetector(threshold=0.8)],
+        }
+        for name, c in compare_detectors(cases, sets).items():
+            print(f"  {name} : P={c.precision:.2f} R={c.recall:.2f} F1={c.f1:.2f}")
+    else:
+        print("\n(set OPENAI_API_KEY to also see the exact-vs-semantic detector comparison)")
