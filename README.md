@@ -163,6 +163,64 @@ for msg in stream_run(my_agent, [LoopDetector(), SemanticLoopDetector()], my_inp
 `stream_run` works with both classic state-dict agents and message-based ReAct agents. It
 yields `event`, `alert`, `metrics`, and `done` messages that you can log, store, or render.
 
+## Analyze an external agent's trace (offline)
+
+You do not have to plug LoopGuard into a live agent to use it. If another team can export
+their agent runs as JSON, LoopGuard can replay those runs through the same detectors and
+report which ones looped. This is the lowest-effort way to try LoopGuard on someone else's
+agent: no SDK, no access to their running system.
+
+```bash
+python -m loopguard.ingest examples/sample_trace.json
+```
+
+The adapter is forgiving about field names (`tool`/`tool_name`/`name`, `args`/`arguments`/
+`input`, and so on), so most exports work with little or no change. See
+`examples/sample_trace.json` for the accepted shape.
+
+## Measure how good the detectors are (evals)
+
+LoopGuard ships with an evaluation harness so detector quality is a number, not a guess.
+
+```bash
+python -m loopguard.evals
+```
+
+It grades the detectors against a labeled dataset and reports precision, recall, and F1;
+computes a convergence score (how often an agent takes the optimal path); compares detector
+line-ups side by side; and, when an OpenAI key is set, runs an LLM-as-a-judge check for
+hallucinations against human labels. See `loopguard/evals.py`.
+
+## Roadmap
+
+Where LoopGuard is and where it is going.
+
+### Available now (v0)
+
+- Tracing, live metrics, and runtime interruption for a single LangGraph agent.
+- Three detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector` (paraphrase
+  loops), `StallDetector` (no progress).
+- Four runnable scenarios, a FastAPI server, and a Next.js UI.
+- Evaluation harness (precision/recall/F1, convergence, detector comparison, LLM-judge).
+- Offline trace analyzer for external agents (`loopguard/ingest.py`).
+
+### Next (v0.x)
+
+- **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
+  several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
+  adapter already carries the `caller` field this needs.
+- **Live SDK for LangGraph (`LoopGuardCallbackHandler`)**: a callback handler that emits an
+  event per tool call and lets LoopGuard monitor and interrupt a real run in process, rather
+  than after the fact.
+- **Surface evals in the product**: expose convergence, detector comparison, and judge
+  results through endpoints and UI panels, alongside the existing detector-accuracy panel.
+
+### Later
+
+- **LangGraph.js / LangChain.js support** for the live path (the offline analyzer already
+  works on any exported JSON regardless of language).
+- **Pluggable action policies**: per-detector choices to warn, interrupt, or hand off.
+
 ## Project structure
 
 ```
