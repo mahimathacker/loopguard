@@ -1,0 +1,28 @@
+[
+  {
+    "run_id": "loop-001",
+    "steps": [
+      {"step": 1, "agent": "research_agent", "tool": "web_search", "args": {"query": "pricing page"}, "output": "no results", "caller": "supervisor"},
+      {"step": 2, "agent": "research_agent", "tool": "web_search", "args": {"query": "pricing page"}, "output": "no results", "caller": "supervisor"},
+      {"step": 3, "agent": "research_agent", "tool": "web_search", "args": {"query": "pricing page"}, "output": "no results", "caller": "supervisor"},
+      {"step": 4, "agent": "research_agent", "tool": "web_search", "args": {"query": "pricing page"}, "output": "no results", "caller": "supervisor"}
+    ]
+  },
+  {
+    "run_id": "stall-002",
+    "steps": [
+      {"step": 1, "agent": "data_agent", "tool": "db_query", "args": {"table": "users"}, "output": "empty"},
+      {"step": 2, "agent": "data_agent", "tool": "db_query", "args": {"table": "orders"}, "output": "empty"},
+      {"step": 3, "agent": "data_agent", "tool": "db_query", "args": {"table": "events"}, "output": "empty"},
+      {"step": 4, "agent": "data_agent", "tool": "db_query", "args": {"table": "logs"}, "output": "empty"}
+    ]
+  },
+  {
+    "run_id": "healthy-003",
+    "steps": [
+      {"step": 1, "agent": "research_agent", "tool": "web_search", "args": {"query": "competitor pricing"}, "output": "found 3 sources"},
+      {"step": 2, "agent": "analysis_agent", "tool": "summarize", "args": {"text": "3 sources"}, "output": "summary ready"},
+      {"step": 3, "agent": "writer_agent", "tool": "draft_report", "args": {"topic": "pricing"}, "output": "report drafted"}
+    ]
+  }
+]
