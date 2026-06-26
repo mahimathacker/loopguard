@@ -234,8 +234,11 @@ agent-loop/
     agent.py          demo agents (scripted) and the real gpt-4o-mini agent
     scenarios.py      the four named scenarios
     runner.py         drives a run and streams messages (the public API)
-  server.py           FastAPI server: /graph and /run (WebSocket)
+    evals.py          evaluation harness (precision/recall, convergence, judge)
+    ingest.py         offline trace analyzer for external agents
+  server.py           FastAPI server: /graph, /run (WebSocket), /eval
   main.py             command line runner
+  examples/           sample external traces for the offline analyzer
   ui/                 Next.js + React Flow front end
   public/             README screenshots
   requirements.txt    Python dependencies
