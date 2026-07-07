@@ -1,9 +1,7 @@
-"""LoopGuard - an observability & runtime-monitoring layer for LangGraph agents.
+"""LoopGuard - stuck-agent detection for LangGraph agents.
 
-LoopGuard wraps a LangGraph run and gives you full visibility into what the agent
-is doing: it traces every step, surfaces live metrics, and runs detectors that catch
-pathological behavior at runtime. Catching agents stuck in loops is the flagship
-capability - but LoopGuard is the whole observability layer, not just a loop detector.
+LoopGuard traces agent steps and runs detectors that catch repeated tool calls,
+semantic loops, and no-progress behavior before an agent burns time and tokens.
 
 Three pillars:
     tracer.Tracer    - (TRACING) records every node execution as a stream of Events
@@ -11,13 +9,21 @@ Three pillars:
     monitor.Monitor  - (RUNTIME MONITORING) runs pluggable detectors over the live stream
 
 Detectors (in detectors.py) are the runtime checks. LoopDetector is the headliner;
-StallDetector / ToolStormDetector show the framework is general, not loop-only.
+SemanticLoopDetector and StallDetector catch paraphrase loops and no-progress runs.
 """
 
 __version__ = "0.1.0"
 
 from .monitor import Monitor
-from .runner import stream_run
 from .tracer import Tracer
 
 __all__ = ["Monitor", "Tracer", "stream_run", "__version__"]
+
+
+def __getattr__(name: str):
+    """Load LangGraph-facing helpers only when callers ask for them."""
+    if name == "stream_run":
+        from .runner import stream_run
+
+        return stream_run
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

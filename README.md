@@ -3,10 +3,12 @@
 LoopGuard detects when LangGraph agents get stuck.
 
 It traces each run and catches repeated tool calls, semantic/paraphrase loops, and
-no-progress behavior before an agent wastes time and tokens. Use it while developing,
-around a live run, or later in CI to fail a change when a known task starts looping.
+no-progress behavior before an agent wastes time and tokens. Use it today while developing
+LangGraph agents or replaying saved traces. CI check mode is planned next, so teams can
+fail a change when a known task starts looping.
 
-It works on the demo agents in this repo and on your own LangGraph agent.
+It works on the demo agents in this repo and includes an experimental `stream_run` helper
+for wrapping LangGraph agents. A cleaner callback-based SDK is planned next.
 
 ## Why this exists
 
@@ -33,11 +35,13 @@ The flow is one direction:
 LangGraph agent --stream--> Tracer --events--> Monitor --> detectors --> alert --> interrupt
 ```
 
-There are two detectors today:
+There are three detectors today:
 
 - `LoopDetector`: catches the same tool call with the same arguments repeated three times.
 - `SemanticLoopDetector`: catches the same intent repeated in different words, using OpenAI
   embeddings. This catches loops that exact matching misses.
+- `StallDetector`: warns when the agent keeps observing the same result and stops making
+  progress. It is non-fatal today, so it reports a stall without interrupting the run.
 
 ## The four scenarios
 
@@ -175,11 +179,13 @@ agent: no SDK, no access to their running system.
 
 ```bash
 python -m loopguard.ingest examples/sample_trace.json
+python -m loopguard.ingest examples/sample_trace.json --json
 ```
 
 The adapter is forgiving about field names (`tool`/`tool_name`/`name`, `args`/`arguments`/
 `input`, and so on), so most exports work with little or no change. See
-`examples/sample_trace.json` for the accepted shape.
+`examples/sample_trace.json` for the accepted shape. The `--json` flag prints a local
+stuck-run report with `clean`, `looping`, and `stalled` counts plus per-run alerts.
 
 ## Measure how good the detectors are
 
@@ -191,10 +197,8 @@ guess.
 python -m loopguard.evals
 ```
 
-It grades the detectors against a labeled dataset and reports precision, recall, and F1;
-computes a convergence score (how often an agent takes the optimal path); compares detector
-line-ups side by side; and, when an OpenAI key is set, runs an LLM-as-a-judge check for
-hallucinations against human labels. See `loopguard/evals.py`.
+It grades the loop detectors against labeled stuck-agent cases and reports precision,
+recall, and F1. See `loopguard/evals.py`.
 
 ## Roadmap
 

@@ -25,13 +25,13 @@ A file may hold a single run (object) or many runs (list of objects).
 from __future__ import annotations
 
 import json
+from argparse import ArgumentParser
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .detectors import Alert, Detector, LoopDetector, StallDetector
 from .monitor import Monitor
-from .runner import tool_signature
 
 
 # Each external field can arrive under several names depending on whose agent emitted
@@ -51,6 +51,12 @@ def _first(d: dict, keys: tuple[str, ...], default: Any = None) -> Any:
     return default
 
 
+def _tool_signature(tool: str, args: dict) -> str:
+    """Normalize a tool call without importing the live LangGraph runner."""
+    norm = ", ".join(f"{k}={str(v).strip().lower()}" for k, v in sorted(args.items()))
+    return f"tool:{tool}({norm})"
+
+
 @dataclass
 class TraceReport:
     """The verdict for one external run after replaying it through the detectors."""
@@ -68,12 +74,22 @@ class TraceReport:
     def summary(self) -> str:
         head = f"run {self.run_id}: {self.steps} steps -> {self.events} events"
         if not self.alerts:
-            return f"  [clean] {head} - no loops or stalls detected"
-        lines = [f"  [FLAGGED] {head}"]
+            return f"  [CLEAN] {head} - no loops or stalls detected"
+        label = "LOOP" if self.status == "looping" else "STALL"
+        lines = [f"  [{label}] {head}"]
         for a in self.alerts:
             tag = "LOOP" if a.fatal else "warn"
             lines.append(f"      - {tag} ({a.detector}): {a.message}")
         return "\n".join(lines)
+
+    @property
+    def status(self) -> str:
+        """Single report status, with fatal loops taking priority over warnings."""
+        if self.looped:
+            return "looping"
+        if self.alerts:
+            return "stalled"
+        return "clean"
 
 
 def _steps_to_observations(steps: list[dict]) -> list[tuple[str, str, str, dict]]:
@@ -93,7 +109,7 @@ def _steps_to_observations(steps: list[dict]) -> list[tuple[str, str, str, dict]
             args = {"value": args}
 
         if tool is not None:
-            sig = tool_signature(str(tool), args)
+            sig = _tool_signature(str(tool), args)
             payload = {"last_tool": str(tool), "last_args": args}
             caller = _first(raw, _CALLER_KEYS)
             if caller is not None:
@@ -134,19 +150,90 @@ def analyze_file(path: str | Path, detectors: list[Detector] | None = None) -> l
     return [analyze_trace(run, detectors) for run in runs]
 
 
+def _alert_type(alert: Alert) -> str:
+    """Small report vocabulary: fatal detector alerts are loops; non-fatal alerts are warns."""
+    return "loop" if alert.fatal else "warn"
+
+
+def _report_alerts(alerts: list[Alert]) -> list[dict]:
+    """Return stable, non-redundant alerts for CLI/CI output."""
+    seen: set[tuple[str, str, bool]] = set()
+    out: list[dict] = []
+    for alert in alerts:
+        key = (alert.detector, alert.kind, alert.fatal)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "type": _alert_type(alert),
+                "detector": alert.detector,
+                "message": alert.message,
+            }
+        )
+    return out
+
+
+def json_report(path: str | Path, reports: list[TraceReport]) -> dict:
+    """Build the machine-readable stuck-run report."""
+    runs = [
+        {
+            "run_id": report.run_id,
+            "status": report.status,
+            "steps": report.steps,
+            "events": report.events,
+            "alerts": _report_alerts(report.alerts),
+        }
+        for report in reports
+    ]
+    return {
+        "source": str(path),
+        "runs_analyzed": len(reports),
+        "summary": status_counts(reports),
+        "runs": runs,
+    }
+
+
+def status_counts(reports: list[TraceReport]) -> dict[str, int]:
+    """Count report statuses for human and JSON summaries."""
+    return {
+        "clean": sum(1 for report in reports if report.status == "clean"),
+        "looping": sum(1 for report in reports if report.status == "looping"),
+        "stalled": sum(1 for report in reports if report.status == "stalled"),
+        "with_alerts": sum(1 for report in reports if report.alerts),
+    }
+
+
+def human_summary(reports: list[TraceReport]) -> str:
+    """Readable status summary for the text CLI output."""
+    counts = status_counts(reports)
+    return "\n".join(
+        [
+            "Summary:",
+            f"  {len(reports)} run(s) analyzed",
+            f"  {counts['clean']} clean",
+            f"  {counts['looping']} looping",
+            f"  {counts['stalled']} stalled/warned",
+            f"  {counts['with_alerts']} run(s) had alerts",
+        ]
+    )
+
+
 if __name__ == "__main__":
     # CLI:  python -m loopguard.ingest <trace.json>
     # Uses offline detectors only (no API key needed). Add SemanticLoopDetector yourself
     # when you want paraphrase-loop catching and have OPENAI_API_KEY set.
-    import sys
+    parser = ArgumentParser(description="Analyze saved agent traces for loops and stalls.")
+    parser.add_argument("path", help="JSON trace file to analyze")
+    parser.add_argument("--json", action="store_true", help="print a machine-readable report")
+    args = parser.parse_args()
 
-    if len(sys.argv) < 2:
-        print("usage: python -m loopguard.ingest <trace.json>")
-        raise SystemExit(1)
+    reports = analyze_file(args.path)
+    if args.json:
+        print(json.dumps(json_report(args.path, reports), indent=2))
+        raise SystemExit(0)
 
-    reports = analyze_file(sys.argv[1])
-    flagged = sum(r.looped for r in reports)
-    print(f"Analyzed {len(reports)} run(s) from {sys.argv[1]}:\n")
+    print(f"Analyzed {len(reports)} run(s) from {args.path}:\n")
     for r in reports:
         print(r.summary())
-    print(f"\n{flagged}/{len(reports)} run(s) flagged as looping.")
+    print(f"\n{human_summary(reports)}")
