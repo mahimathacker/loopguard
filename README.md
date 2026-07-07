@@ -1,8 +1,10 @@
 # LoopGuard
 
-An observability and runtime-monitoring layer for LangGraph agents. LoopGuard traces
-every step an agent takes, shows live metrics, and runs detectors that catch agents stuck
-in loops, then stops them before they waste time and tokens.
+LoopGuard detects when LangGraph agents get stuck.
+
+It traces each run and catches repeated tool calls, semantic/paraphrase loops, and
+no-progress behavior before an agent wastes time and tokens. Use it while developing,
+around a live run, or later in CI to fail a change when a known task starts looping.
 
 It works on the demo agents in this repo and on your own LangGraph agent.
 
@@ -16,7 +18,8 @@ when this happens.
 
 ## How it works
 
-LoopGuard has three parts, one for each job:
+LoopGuard stays narrow: record what the agent did, detect stuck behavior, and report the
+result. It has three parts, one for each job:
 
 | Part | Job | File |
 |------|-----|------|
@@ -178,9 +181,11 @@ The adapter is forgiving about field names (`tool`/`tool_name`/`name`, `args`/`a
 `input`, and so on), so most exports work with little or no change. See
 `examples/sample_trace.json` for the accepted shape.
 
-## Measure how good the detectors are (evals)
+## Measure how good the detectors are
 
-LoopGuard ships with an evaluation harness so detector quality is a number, not a guess.
+LoopGuard is not trying to be a full eval platform, but the detectors still need to be
+measurable. The repo includes a small harness so detector quality is a number, not a
+guess.
 
 ```bash
 python -m loopguard.evals
@@ -193,7 +198,9 @@ hallucinations against human labels. See `loopguard/evals.py`.
 
 ## Roadmap
 
-Where LoopGuard is and where it is going.
+LoopGuard is deliberately not a general AI eval SDK, dataset manager, judge system, cost
+platform, or full observability dashboard. The product stays focused on one painful
+question: **did my agent get stuck?**
 
 ### Available now (v0)
 
@@ -201,22 +208,26 @@ Where LoopGuard is and where it is going.
 - Three detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector` (paraphrase
   loops), `StallDetector` (no progress).
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
-- Evaluation harness (precision/recall/F1, convergence, detector comparison, LLM-judge).
+- Small detector-quality harness (precision/recall/F1).
 - Offline trace analyzer for external agents (`loopguard/ingest.py`).
 
 ### Next (v0.x)
 
+- **Small stuck-run report**: a concise CLI/JSON report that says clean or flagged, which
+  detector fired, the repeated tool/intent/result, and the step where it happened.
+- **CI check mode**: run LoopGuard against saved traces or scripted scenarios and exit
+  non-zero when a known task loops, stalls, or exceeds a simple step budget.
 - **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
   several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
   adapter already carries the `caller` field this needs.
 - **Live SDK for LangGraph (`LoopGuardCallbackHandler`)**: a callback handler that emits an
   event per tool call and lets LoopGuard monitor and interrupt a real run in process, rather
   than after the fact.
-- **Surface evals in the product**: expose convergence, detector comparison, and judge
-  results through endpoints and UI panels, alongside the existing detector-accuracy panel.
 
 ### Later
 
+- **GitHub check annotation**: post the small stuck-run report on a pull request when the
+  CI check fails.
 - **LangGraph.js / LangChain.js support** for the live path (the offline analyzer already
   works on any exported JSON regardless of language).
 - **Pluggable action policies**: per-detector choices to warn, interrupt, or hand off.
