@@ -72,7 +72,7 @@ def _interpret_messages(messages: list) -> tuple[str, str, dict] | None:
     # otherwise it is the model's final answer (no tool calls) -> the run is finishing
     content = str(getattr(msg, "content", "")).strip().replace("\n", " ")[:200]
     return f"answered: {content}", f"final:{content}", {"final": content}
-
+    
 
 def stream_run(
     agent,
