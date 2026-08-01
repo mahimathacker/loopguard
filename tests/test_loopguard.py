@@ -84,6 +84,16 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(monitor.alerts[-1].detector, "StallDetector")
         self.assertFalse(monitor.alerts[-1].fatal)
 
+    def test_stall_detector_can_interrupt_when_configured(self):
+        monitor = Monitor([StallDetector(patience=2, fatal=True)])
+
+        for _ in range(2):
+            monitor.observe("tools", "observed: no results", "result:no results")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.alerts[-1].detector, "StallDetector")
+        self.assertTrue(monitor.alerts[-1].fatal)
+
     def test_step_budget_detector_interrupts_after_limit(self):
         monitor = Monitor([StepBudgetDetector(max_steps=2)])
 
@@ -185,6 +195,42 @@ class RunnerWrapperTests(unittest.TestCase):
         self.assertEqual(guard.max_tool_calls, 5)
         self.assertIn("StepBudgetDetector", [type(item).__name__ for item in guard.detectors])
         self.assertIn("ToolCallBudgetDetector", [type(item).__name__ for item in guard.detectors])
+
+    def test_loopguard_from_config_uses_live_detector_policy(self):
+        config = "\n".join(
+            [
+                "live:",
+                "  exact_threshold: 5",
+                "  exact_window: 20",
+                "  exact_fatal: false",
+                "  stall_patience: 2",
+                "  stall_fatal: true",
+                "  semantic: true",
+                "  semantic_threshold: 0.75",
+                "  semantic_window: 8",
+                "  semantic_min_repeats: 4",
+                "  semantic_fatal: false",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text(config)
+            guard = LoopGuard.from_config(str(path))
+
+        loop = next(item for item in guard.detectors if isinstance(item, LoopDetector))
+        stall = next(item for item in guard.detectors if isinstance(item, StallDetector))
+        semantic = next(item for item in guard.detectors if isinstance(item, SemanticLoopDetector))
+
+        self.assertEqual(loop.threshold, 5)
+        self.assertEqual(loop.window, 20)
+        self.assertFalse(loop.fatal)
+        self.assertEqual(stall.patience, 2)
+        self.assertTrue(stall.fatal)
+        self.assertEqual(semantic.threshold, 0.75)
+        self.assertEqual(semantic.window, 8)
+        self.assertEqual(semantic.min_repeats, 4)
+        self.assertFalse(semantic.fatal)
 
 
 class MetricsTests(unittest.TestCase):

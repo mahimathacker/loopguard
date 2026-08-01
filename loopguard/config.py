@@ -22,6 +22,16 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def positive_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ArgumentTypeError("must be a number") from exc
+    if parsed <= 0:
+        raise ArgumentTypeError("must be > 0")
+    return parsed
+
+
 def parse_scalar(value: str):
     """Parse the tiny scalar set used by LoopGuard config files."""
     value = value.strip()
@@ -109,6 +119,29 @@ def section(config: dict, name: str) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"{name} config must be a mapping")
     return value
+
+
+def config_bool(config: dict, key: str, default: bool) -> bool:
+    raw = config.get(key, default)
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        normalized = raw.lower()
+        if normalized in {"true", "yes", "on", "1"}:
+            return True
+        if normalized in {"false", "no", "off", "0"}:
+            return False
+    raise ValueError(f"{key} must be true or false")
+
+
+def config_int(config: dict, key: str, default: int) -> int:
+    raw = config.get(key, default)
+    return positive_int(str(raw))
+
+
+def config_float(config: dict, key: str, default: float) -> float:
+    raw = config.get(key, default)
+    return positive_float(str(raw))
 
 
 def config_budget(config: dict, key: str) -> int | None:

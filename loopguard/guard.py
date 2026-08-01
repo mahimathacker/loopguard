@@ -9,19 +9,50 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from .config import config_budget, load_config, section
+from .config import config_bool, config_budget, config_float, config_int, load_config, section
 from .detectors import (
     Detector,
     LoopDetector,
+    SemanticLoopDetector,
     StallDetector,
     StepBudgetDetector,
     ToolCallBudgetDetector,
 )
 
 
-def default_detectors() -> list[Detector]:
+def default_detectors(
+    exact_threshold: int = 3,
+    exact_window: int = 12,
+    exact_fatal: bool = True,
+    stall_patience: int = 4,
+    stall_fatal: bool = False,
+) -> list[Detector]:
     """Cheap live defaults: exact repeated tool calls and no-progress warnings."""
-    return [LoopDetector(), StallDetector()]
+    return [
+        LoopDetector(threshold=exact_threshold, window=exact_window, fatal=exact_fatal),
+        StallDetector(patience=stall_patience, fatal=stall_fatal),
+    ]
+
+
+def configured_detectors(config: dict) -> list[Detector]:
+    """Build live detectors from the small ``live`` config section."""
+    detectors = default_detectors(
+        exact_threshold=config_int(config, "exact_threshold", 3),
+        exact_window=config_int(config, "exact_window", 12),
+        exact_fatal=config_bool(config, "exact_fatal", True),
+        stall_patience=config_int(config, "stall_patience", 4),
+        stall_fatal=config_bool(config, "stall_fatal", False),
+    )
+    if config_bool(config, "semantic", False):
+        detectors.append(
+            SemanticLoopDetector(
+                threshold=config_float(config, "semantic_threshold", 0.8),
+                window=config_int(config, "semantic_window", 6),
+                min_repeats=config_int(config, "semantic_min_repeats", 3),
+                fatal=config_bool(config, "semantic_fatal", True),
+            )
+        )
+    return detectors
 
 
 class LoopGuard:
@@ -54,10 +85,10 @@ class LoopGuard:
         detectors: list[Detector] | None = None,
         recursion_limit: int = 50,
     ) -> "LoopGuard":
-        """Create a live guard from ``loopguard.yml`` budget settings."""
+        """Create a live guard from ``loopguard.yml`` detector and budget settings."""
         config = section(load_config(path), "live")
         return cls(
-            detectors=detectors,
+            detectors=list(detectors) if detectors is not None else configured_detectors(config),
             recursion_limit=recursion_limit,
             max_steps=config_budget(config, "max_steps"),
             max_tool_calls=config_budget(config, "max_tool_calls"),
@@ -76,4 +107,4 @@ class LoopGuard:
         yield from stream_run(agent, self.detectors, initial, limit)
 
 
-__all__ = ["LoopGuard", "default_detectors"]
+__all__ = ["LoopGuard", "configured_detectors", "default_detectors"]

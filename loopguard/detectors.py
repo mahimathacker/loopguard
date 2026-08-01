@@ -49,9 +49,10 @@ class LoopDetector(Detector):
 
     name = "LoopDetector"
 
-    def __init__(self, threshold: int = 3, window: int = 12) -> None:
+    def __init__(self, threshold: int = 3, window: int = 12, fatal: bool = True) -> None:
         self.threshold = threshold
         self.window = window
+        self.fatal = fatal
 
     def inspect(self, event: Event, history: list[Event]) -> Alert | None:
         if not event.signature.startswith("tool:"):
@@ -68,6 +69,7 @@ class LoopDetector(Detector):
                     f"Repeated tool call {count}x within the last {self.window} steps: "
                     f"{event.signature.removeprefix('tool:')}"
                 ),
+                fatal=self.fatal,
             )
         return None
 
@@ -81,8 +83,9 @@ class StallDetector(Detector):
 
     name = "StallDetector"
 
-    def __init__(self, patience: int = 4) -> None:
+    def __init__(self, patience: int = 4, fatal: bool = False) -> None:
         self.patience = patience
+        self.fatal = fatal
 
     def inspect(self, event: Event, history: list[Event]) -> Alert | None:
         if not event.signature.startswith("result:"):
@@ -94,7 +97,7 @@ class StallDetector(Detector):
                 detector=self.name,
                 kind="stall",
                 message=f"No new information for {self.patience} consecutive observations.",
-                fatal=False,  # warn, don't necessarily kill
+                fatal=self.fatal,
             )
         return None
 
@@ -104,8 +107,9 @@ class StepBudgetDetector(Detector):
 
     name = "StepBudgetDetector"
 
-    def __init__(self, max_steps: int) -> None:
+    def __init__(self, max_steps: int, fatal: bool = True) -> None:
         self.max_steps = max_steps
+        self.fatal = fatal
 
     def inspect(self, event: Event, history: list[Event]) -> Alert | None:
         if len(history) > self.max_steps:
@@ -113,6 +117,7 @@ class StepBudgetDetector(Detector):
                 detector=self.name,
                 kind="step_budget",
                 message=f"Run exceeded step budget: {len(history)} > {self.max_steps}.",
+                fatal=self.fatal,
             )
         return None
 
@@ -122,8 +127,9 @@ class ToolCallBudgetDetector(Detector):
 
     name = "ToolCallBudgetDetector"
 
-    def __init__(self, max_tool_calls: int) -> None:
+    def __init__(self, max_tool_calls: int, fatal: bool = True) -> None:
         self.max_tool_calls = max_tool_calls
+        self.fatal = fatal
 
     def inspect(self, event: Event, history: list[Event]) -> Alert | None:
         if not event.signature.startswith("tool:"):
@@ -138,6 +144,7 @@ class ToolCallBudgetDetector(Detector):
                     f"Run exceeded tool-call budget: {tool_calls} > "
                     f"{self.max_tool_calls}."
                 ),
+                fatal=self.fatal,
             )
         return None
 
@@ -160,11 +167,13 @@ class SemanticLoopDetector(Detector):
         threshold: float = 0.8,
         window: int = 6,
         min_repeats: int = 3,
+        fatal: bool = True,
     ) -> None:
         self.embedder = embedder or OpenAIEmbedder()
         self.threshold = threshold
         self.window = window
         self.min_repeats = min_repeats
+        self.fatal = fatal
 
     def _content(self, event: Event) -> str:
         """The text we embed: the variable part of the decision (the tool args),
@@ -197,5 +206,6 @@ class SemanticLoopDetector(Detector):
                     f"{similar + 1} semantically similar tool calls within the last "
                     f"{self.window} steps (>= {self.threshold:.0%} similar) - a paraphrase loop."
                 ),
+                fatal=self.fatal,
             )
         return None
