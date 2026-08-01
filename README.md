@@ -7,8 +7,8 @@ no-progress behavior before an agent wastes time and tokens. Use it today while 
 LangGraph agents or replaying saved traces. CI check mode is planned next, so teams can
 fail a change when a known task starts looping.
 
-It works on the demo agents in this repo and includes an experimental `stream_run` helper
-for wrapping LangGraph agents. A cleaner callback-based SDK is planned next.
+It works on the demo agents in this repo, includes a small `LoopGuard` live wrapper, and
+can replay saved JSON traces. A cleaner callback-based SDK is planned next.
 
 ## Why this exists
 
@@ -155,20 +155,28 @@ python main.py trap       # real agent, loops and gets caught
 
 ## Use LoopGuard on your own agent
 
-LoopGuard is not tied to these demos. Wrap any compiled LangGraph agent and read the
-stream of messages it produces:
+LoopGuard is not tied to these demos. Wrap any compiled LangGraph agent with the live
+guard and read the stream of messages it produces:
 
 ```python
-from loopguard import stream_run
-from loopguard.detectors import LoopDetector, SemanticLoopDetector
+from loopguard import LoopGuard
+from loopguard.detectors import LoopDetector, SemanticLoopDetector, StallDetector
 
-for msg in stream_run(my_agent, [LoopDetector(), SemanticLoopDetector()], my_input):
+guard = LoopGuard(detectors=[
+    LoopDetector(),
+    SemanticLoopDetector(),
+    StallDetector(),
+])
+
+for msg in guard.stream(my_agent, my_input):
     if msg["type"] == "alert" and msg["fatal"]:
         print("loop detected:", msg["message"])  # the run is interrupted right after
 ```
 
-`stream_run` works with both classic state-dict agents and message-based ReAct agents. It
-yields `event`, `alert`, `metrics`, and `done` messages that you can log, store, or render.
+`LoopGuard.stream(...)` works with both classic state-dict agents and message-based ReAct
+agents. It yields `event`, `alert`, `metrics`, and `done` messages that you can log,
+store, or render. The lower-level `stream_run(...)` helper is still available for callers
+that want function-style control.
 
 ## Analyze an external agent's trace (offline)
 
@@ -212,21 +220,21 @@ question: **did my agent get stuck?**
 - Three detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector` (paraphrase
   loops), `StallDetector` (no progress).
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
+- A small `LoopGuard` live wrapper for compiled LangGraph agents.
+- Local stuck-run JSON reports for saved traces.
 - Small detector-quality harness (precision/recall/F1).
 - Offline trace analyzer for external agents (`loopguard/ingest.py`).
 
 ### Next (v0.x)
 
-- **Small stuck-run report**: a concise CLI/JSON report that says clean or flagged, which
-  detector fired, the repeated tool/intent/result, and the step where it happened.
 - **CI check mode**: run LoopGuard against saved traces or scripted scenarios and exit
   non-zero when a known task loops, stalls, or exceeds a simple step budget.
 - **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
   several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
   adapter already carries the `caller` field this needs.
-- **Live SDK for LangGraph (`LoopGuardCallbackHandler`)**: a callback handler that emits an
-  event per tool call and lets LoopGuard monitor and interrupt a real run in process, rather
-  than after the fact.
+- **Callback-based SDK for LangGraph (`LoopGuardCallbackHandler`)**: a cleaner integration
+  that emits an event per tool call and lets LoopGuard monitor and interrupt a real run in
+  process.
 
 ### Later
 
@@ -245,6 +253,7 @@ agent-loop/
     metrics.py        derives numbers from the trace
     detectors.py      LoopDetector, SemanticLoopDetector, StallDetector
     monitor.py        runs detectors over the live trace
+    guard.py          small public LoopGuard wrapper for live runs
     embeddings.py     OpenAI embeddings for semantic detection
     agent.py          demo agents (scripted) and the real gpt-4o-mini agent
     scenarios.py      the four named scenarios

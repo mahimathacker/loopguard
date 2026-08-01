@@ -17,11 +17,15 @@ __version__ = "0.1.0"
 from .monitor import Monitor
 from .tracer import Tracer
 
-__all__ = ["Monitor", "Tracer", "stream_run", "__version__"]
+__all__ = ["LoopGuard", "Monitor", "Tracer", "stream_run", "__version__"]
 
 
 def __getattr__(name: str):
     """Load LangGraph-facing helpers only when callers ask for them."""
+    if name == "LoopGuard":
+        from .guard import LoopGuard
+
+        return LoopGuard
     if name == "stream_run":
         from .runner import stream_run
 

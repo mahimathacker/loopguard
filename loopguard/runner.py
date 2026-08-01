@@ -17,7 +17,11 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Iterator
 
-from langgraph.errors import GraphRecursionError
+try:
+    from langgraph.errors import GraphRecursionError
+except ModuleNotFoundError:  # lets fake-agent tests run without LangGraph installed
+    class GraphRecursionError(Exception):
+        pass
 
 from .detectors import Detector
 from .metrics import Metrics

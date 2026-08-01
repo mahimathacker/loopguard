@@ -4,17 +4,15 @@ Detector A needs to ask "are these two agent decisions *similar*?" even when the
 not byte-identical. The standard way: turn each text into a vector (an "embedding") via
 an embedding model, then measure the angle between vectors (cosine similarity).
 
-We use OpenAI's embedding API for the vectors and numpy for the cosine math, so none of
-it is hand-rolled. The Embedder interface means you can swap in a different backend
-(local sentence-transformers, etc.) without touching the detector.
+We use OpenAI's embedding API for the vectors. The Embedder interface means you can swap
+in a different backend (local sentence-transformers, etc.) without touching the detector.
 """
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Protocol
-
-import numpy as np
 
 
 class Embedder(Protocol):
@@ -59,8 +57,12 @@ class OpenAIEmbedder:
 def cosine(a: list[float], b: list[float]) -> float:
     """Cosine similarity of two vectors. 1.0 = same direction, 0.0 = unrelated.
     OpenAI vectors are not unit-length, so we normalize by both magnitudes."""
-    va, vb = np.asarray(a), np.asarray(b)
-    na, nb = np.linalg.norm(va), np.linalg.norm(vb)
+    if len(a) != len(b):
+        return 0.0
+
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
     if na == 0 or nb == 0:
         return 0.0
-    return float(va @ vb / (na * nb))
+    return dot / (na * nb)

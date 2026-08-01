@@ -3,7 +3,6 @@ langchain-core>=0.3.0
 
 # Semantic detection (Detector A)
 openai>=1.0.0
-numpy>=1.24
 python-dotenv>=1.0.0
 
 # Streaming API (Phase 2)
