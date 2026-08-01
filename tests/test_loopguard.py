@@ -143,6 +143,7 @@ class IngestTests(unittest.TestCase):
             {"clean": 1, "looping": 1, "stalled": 1, "with_alerts": 2},
         )
         self.assertEqual([run["status"] for run in report["runs"]], ["looping", "stalled", "clean"])
+        self.assertEqual([run["tool_calls"] for run in report["runs"]], [4, 4, 3])
         self.assertEqual(report["runs"][0]["alerts"][0]["type"], "loop")
         self.assertEqual(report["runs"][1]["alerts"][0]["type"], "warn")
 
@@ -251,6 +252,56 @@ class CheckCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertEqual(proc.stdout, "")
         self.assertIn("LoopGuard check error", proc.stderr)
+
+    def test_check_fails_on_step_budget(self):
+        clean_trace = {
+            "run_id": "too-many-steps",
+            "steps": [
+                {"agent": "a", "tool": "one", "args": {}, "output": "ok"},
+                {"agent": "a", "tool": "two", "args": {}, "output": "ok"},
+                {"agent": "a", "tool": "three", "args": {}, "output": "ok"},
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "steps.json"
+            path.write_text(json.dumps(clean_trace))
+            proc = subprocess.run(
+                [sys.executable, "-m", "loopguard.check", str(path), "--max-steps", "2", "--json"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        parsed = json.loads(proc.stdout)
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(parsed["matched_failures"], [])
+        self.assertEqual(parsed["budget_violations"][0]["type"], "max_steps")
+        self.assertEqual(parsed["budget_violations"][0]["actual"], 3)
+
+    def test_check_fails_on_tool_call_budget(self):
+        clean_trace = {
+            "run_id": "too-many-tools",
+            "steps": [
+                {"agent": "a", "tool": "one", "args": {}, "output": "ok"},
+                {"agent": "a", "tool": "two", "args": {}, "output": "done"},
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tools.json"
+            path.write_text(json.dumps(clean_trace))
+            proc = subprocess.run(
+                [sys.executable, "-m", "loopguard.check", str(path), "--max-tool-calls", "1"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Budget violations:", proc.stdout)
+        self.assertIn("max_tool_calls", proc.stdout)
+        self.assertIn("Check: FAIL", proc.stdout)
 
 
 class EmbeddingMathTests(unittest.TestCase):

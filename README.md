@@ -203,11 +203,13 @@ with `1` when a selected stuck status appears, and `2` for invalid input.
 ```bash
 python -m loopguard.check examples/sample_trace.json
 python -m loopguard.check examples/sample_trace.json --fail-on stalled
+python -m loopguard.check examples/sample_trace.json --max-steps 20 --max-tool-calls 10
 python -m loopguard.check examples/sample_trace.json --fail-on looping --fail-on stalled --json
 ```
 
 By default, only `looping` fails the check. Use `--fail-on stalled` to fail on
-no-progress warnings too, or `--fail-on alerts` to fail on any alert.
+no-progress warnings too, or `--fail-on alerts` to fail on any alert. Step and tool-call
+budgets always fail the check when exceeded.
 
 ## Measure how good the detectors are
 
@@ -245,14 +247,14 @@ question: **did my agent get stuck?**
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
 - A small `LoopGuard` live wrapper for compiled LangGraph agents.
 - Local stuck-run JSON reports for saved traces.
-- CI-friendly saved-trace check mode with exit codes.
+- CI-friendly saved-trace check mode with exit codes and simple step/tool-call budgets.
 - Small detector-quality harness (precision/recall/F1).
 - Offline trace analyzer for external agents (`loopguard/ingest.py`).
 
 ### Next (v0.x)
 
-- **Step budget checks**: fail or warn when a saved trace or live run exceeds a configured
-  number of steps/tool calls.
+- **Config file support**: move detector thresholds, fail rules, and budgets into a small
+  `loopguard.yml`.
 - **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
   several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
   adapter already carries the `caller` field this needs.

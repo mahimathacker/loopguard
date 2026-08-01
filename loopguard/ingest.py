@@ -64,6 +64,7 @@ class TraceReport:
     run_id: str
     steps: int                                   # external steps in the trace
     events: int                                  # internal Events produced (>= steps)
+    tool_calls: int = 0                          # internal tool-call observations
     alerts: list[Alert] = field(default_factory=list)
 
     @property
@@ -139,6 +140,7 @@ def analyze_trace(trace: dict, detectors: list[Detector] | None = None) -> Trace
         run_id=str(trace.get("run_id", "unknown")),
         steps=len(steps),
         events=len(observations),
+        tool_calls=sum(1 for _, _, sig, _ in observations if sig.startswith("tool:")),
         alerts=list(monitor.alerts),
     )
 
@@ -182,6 +184,7 @@ def json_report(path: str | Path, reports: list[TraceReport]) -> dict:
             "status": report.status,
             "steps": report.steps,
             "events": report.events,
+            "tool_calls": report.tool_calls,
             "alerts": _report_alerts(report.alerts),
         }
         for report in reports
