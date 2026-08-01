@@ -35,13 +35,15 @@ The flow is one direction:
 LangGraph agent --stream--> Tracer --events--> Monitor --> detectors --> alert --> interrupt
 ```
 
-There are three detectors today:
+There are four behavior detectors today:
 
 - `LoopDetector`: catches the same tool call with the same arguments repeated three times.
 - `SemanticLoopDetector`: catches the same intent repeated in different words, using OpenAI
   embeddings. This catches loops that exact matching misses.
 - `StallDetector`: warns when the agent keeps observing the same result and stops making
   progress. It is non-fatal today, so it reports a stall without interrupting the run.
+- `HandoffLoopDetector`: catches repeated closed handoff cycles across agents, such as
+  planner -> researcher -> reviewer -> planner.
 
 ## The four scenarios
 
@@ -222,6 +224,10 @@ live:
   exact_window: 12
   stall_patience: 4
   stall_fatal: false
+  handoff_repeats: 2
+  handoff_window: 16
+  handoff_max_cycle_length: 5
+  handoff_fatal: true
   semantic: false
 
 check:
@@ -246,8 +252,9 @@ Command-line flags override config values.
 
 For live runs, `exact_threshold` and `exact_window` tune repeated-tool-call detection.
 `stall_patience` controls how many repeated observations count as no progress, and
-`stall_fatal` controls whether that should interrupt or only warn. Set `semantic: true`
-to enable paraphrase-loop detection with embeddings, then tune `semantic_threshold`,
+`stall_fatal` controls whether that should interrupt or only warn. `handoff_*` settings
+tune multi-agent cycle detection from `caller` fields in traces. Set `semantic: true` to
+enable paraphrase-loop detection with embeddings, then tune `semantic_threshold`,
 `semantic_window`, and `semantic_min_repeats` if needed.
 
 ## Measure how good the detectors are
@@ -281,8 +288,9 @@ question: **did my agent get stuck?**
 ### Available now (v0)
 
 - Tracing, live metrics, and runtime interruption for a single LangGraph agent.
-- Three detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector` (paraphrase
-  loops), `StallDetector` (no progress).
+- Four behavior detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector`
+  (paraphrase loops), `StallDetector` (no progress), and `HandoffLoopDetector`
+  (multi-agent handoff cycles).
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
 - A small `LoopGuard` live wrapper for compiled LangGraph agents.
 - Local stuck-run JSON reports for saved traces.
@@ -293,9 +301,6 @@ question: **did my agent get stuck?**
 
 ### Next (v0.x)
 
-- **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
-  several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
-  adapter already carries the `caller` field this needs.
 - **Callback-based SDK for LangGraph (`LoopGuardCallbackHandler`)**: a cleaner integration
   that emits an event per tool call and lets LoopGuard monitor and interrupt a real run in
   process.
@@ -315,7 +320,7 @@ agent-loop/
   loopguard/          the library
     tracer.py         records events (the trace)
     metrics.py        derives numbers from the trace
-    detectors.py      LoopDetector, SemanticLoopDetector, StallDetector
+    detectors.py      loop, semantic loop, stall, budget, and handoff detectors
     monitor.py        runs detectors over the live trace
     guard.py          small public LoopGuard wrapper for live runs
     embeddings.py     OpenAI embeddings for semantic detection

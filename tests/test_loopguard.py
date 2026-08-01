@@ -7,6 +7,7 @@ from pathlib import Path
 
 from loopguard import LoopGuard
 from loopguard.detectors import (
+    HandoffLoopDetector,
     LoopDetector,
     SemanticLoopDetector,
     StallDetector,
@@ -14,7 +15,7 @@ from loopguard.detectors import (
     ToolCallBudgetDetector,
 )
 from loopguard.embeddings import cosine
-from loopguard.ingest import analyze_file, human_summary, json_report
+from loopguard.ingest import analyze_file, analyze_trace, human_summary, json_report
 from loopguard.metrics import Metrics
 from loopguard.monitor import Monitor
 from loopguard.tracer import Event
@@ -115,6 +116,42 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(monitor.alerts[-1].detector, "ToolCallBudgetDetector")
         self.assertEqual(monitor.alerts[-1].kind, "tool_call_budget")
 
+    def test_handoff_loop_detector_interrupts_on_repeated_cycle(self):
+        monitor = Monitor([HandoffLoopDetector(repeats=2, window=8)])
+
+        for caller, agent in [
+            ("planner", "researcher"),
+            ("researcher", "reviewer"),
+            ("reviewer", "planner"),
+            ("planner", "researcher"),
+            ("researcher", "reviewer"),
+            ("reviewer", "planner"),
+        ]:
+            monitor.observe(
+                agent,
+                f"{caller} handed off to {agent}",
+                f"handoff:{caller}->{agent}",
+                caller=caller,
+            )
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.alerts[-1].detector, "HandoffLoopDetector")
+        self.assertEqual(monitor.alerts[-1].kind, "handoff_loop")
+
+    def test_handoff_loop_detector_ignores_repeated_one_way_handoff(self):
+        monitor = Monitor([HandoffLoopDetector(repeats=2, window=8)])
+
+        for _ in range(4):
+            monitor.observe(
+                "researcher",
+                "supervisor handed off to researcher",
+                "handoff:supervisor->researcher",
+                caller="supervisor",
+            )
+
+        self.assertFalse(monitor.should_interrupt)
+        self.assertEqual(monitor.alerts, [])
+
     def test_semantic_loop_detector_uses_meaning_not_exact_text(self):
         detector = SemanticLoopDetector(embedder=FakeEmbedder(), threshold=0.8)
         monitor = Monitor([detector])
@@ -205,6 +242,10 @@ class RunnerWrapperTests(unittest.TestCase):
                 "  exact_fatal: false",
                 "  stall_patience: 2",
                 "  stall_fatal: true",
+                "  handoff_repeats: 3",
+                "  handoff_window: 18",
+                "  handoff_max_cycle_length: 4",
+                "  handoff_fatal: false",
                 "  semantic: true",
                 "  semantic_threshold: 0.75",
                 "  semantic_window: 8",
@@ -220,6 +261,7 @@ class RunnerWrapperTests(unittest.TestCase):
 
         loop = next(item for item in guard.detectors if isinstance(item, LoopDetector))
         stall = next(item for item in guard.detectors if isinstance(item, StallDetector))
+        handoff = next(item for item in guard.detectors if isinstance(item, HandoffLoopDetector))
         semantic = next(item for item in guard.detectors if isinstance(item, SemanticLoopDetector))
 
         self.assertEqual(loop.threshold, 5)
@@ -227,6 +269,10 @@ class RunnerWrapperTests(unittest.TestCase):
         self.assertFalse(loop.fatal)
         self.assertEqual(stall.patience, 2)
         self.assertTrue(stall.fatal)
+        self.assertEqual(handoff.repeats, 3)
+        self.assertEqual(handoff.window, 18)
+        self.assertEqual(handoff.max_cycle_length, 4)
+        self.assertFalse(handoff.fatal)
         self.assertEqual(semantic.threshold, 0.75)
         self.assertEqual(semantic.window, 8)
         self.assertEqual(semantic.min_repeats, 4)
@@ -287,6 +333,24 @@ class IngestTests(unittest.TestCase):
         parsed = json.loads(proc.stdout)
         self.assertEqual(parsed["summary"]["looping"], 1)
         self.assertEqual(proc.stderr, "")
+
+    def test_ingest_detects_handoff_loop_from_caller_fields(self):
+        trace = {
+            "run_id": "handoff-004",
+            "steps": [
+                {"agent": "researcher", "caller": "planner", "output": "handoff"},
+                {"agent": "reviewer", "caller": "researcher", "output": "handoff"},
+                {"agent": "planner", "caller": "reviewer", "output": "handoff"},
+                {"agent": "researcher", "caller": "planner", "output": "handoff"},
+                {"agent": "reviewer", "caller": "researcher", "output": "handoff"},
+                {"agent": "planner", "caller": "reviewer", "output": "handoff"},
+            ],
+        }
+
+        report = analyze_trace(trace)
+
+        self.assertEqual(report.status, "looping")
+        self.assertEqual(report.alerts[-1].detector, "HandoffLoopDetector")
 
 
 class CheckCliTests(unittest.TestCase):

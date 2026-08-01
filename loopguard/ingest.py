@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .detectors import Alert, Detector, LoopDetector, StallDetector
+from .detectors import Alert, Detector, HandoffLoopDetector, LoopDetector, StallDetector
 from .monitor import Monitor
 
 
@@ -114,19 +114,27 @@ def _steps_to_observations(steps: list[dict]) -> list[tuple[str, str, str, dict]
             payload = {"last_tool": str(tool), "last_args": args}
             caller = _first(raw, _CALLER_KEYS)
             if caller is not None:
-                payload["caller"] = caller  # carried for a future handoff-loop detector
+                payload["caller"] = caller
             obs.append((agent, f"decided: {tool}({args})", sig, payload))
 
         output = _first(raw, _OUTPUT_KEYS)
         if output is not None:
             text = str(output).strip().replace("\n", " ")[:160]
-            obs.append((agent, f"observed: {text}", f"result:{text}", {"last_result": text}))
+            payload = {"last_result": text}
+            caller = _first(raw, _CALLER_KEYS)
+            if caller is not None:
+                payload["caller"] = caller
+            obs.append((agent, f"observed: {text}", f"result:{text}", payload))
     return obs
 
 
 def analyze_trace(trace: dict, detectors: list[Detector] | None = None) -> TraceReport:
     """Replay one external trace through a fresh Monitor and return its report."""
-    detectors = detectors if detectors is not None else [LoopDetector(), StallDetector()]
+    detectors = (
+        detectors
+        if detectors is not None
+        else [LoopDetector(), StallDetector(), HandoffLoopDetector()]
+    )
     for d in detectors:
         d.reset()
 

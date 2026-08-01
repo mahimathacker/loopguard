@@ -149,6 +149,76 @@ class ToolCallBudgetDetector(Detector):
         return None
 
 
+class HandoffLoopDetector(Detector):
+    """Detect repeated closed handoff cycles across multiple agents.
+
+    A single agent can look fine locally while the system cycles globally:
+    planner -> researcher -> reviewer -> planner. This detector reads the optional
+    ``caller`` payload field and flags when the same closed cycle repeats consecutively.
+    """
+
+    name = "HandoffLoopDetector"
+
+    def __init__(
+        self,
+        repeats: int = 2,
+        window: int = 16,
+        max_cycle_length: int = 5,
+        fatal: bool = True,
+    ) -> None:
+        self.repeats = repeats
+        self.window = window
+        self.max_cycle_length = max_cycle_length
+        self.fatal = fatal
+
+    def _handoff_edges(self, history: list[Event]) -> list[tuple[str, str]]:
+        edges: list[tuple[str, str]] = []
+        for item in history[-self.window:]:
+            caller = item.payload.get("caller")
+            if caller is None:
+                continue
+            source = str(caller)
+            target = item.node
+            if source != target:
+                edges.append((source, target))
+        return edges
+
+    def _is_closed_cycle(self, cycle: list[tuple[str, str]]) -> bool:
+        if len(cycle) < 2:
+            return False
+        for (_, target), (next_source, _) in zip(cycle, cycle[1:]):
+            if target != next_source:
+                return False
+        return cycle[-1][1] == cycle[0][0]
+
+    def _cycle_text(self, cycle: list[tuple[str, str]]) -> str:
+        nodes = [cycle[0][0], *[target for _, target in cycle]]
+        return " -> ".join(nodes)
+
+    def inspect(self, event: Event, history: list[Event]) -> Alert | None:
+        if event.payload.get("caller") is None:
+            return None
+
+        edges = self._handoff_edges(history)
+        max_length = min(self.max_cycle_length, len(edges) // self.repeats)
+        for length in range(2, max_length + 1):
+            cycle = edges[-length:]
+            if not self._is_closed_cycle(cycle):
+                continue
+            expected = cycle * self.repeats
+            if edges[-len(expected):] == expected:
+                return Alert(
+                    detector=self.name,
+                    kind="handoff_loop",
+                    message=(
+                        f"Repeated agent handoff cycle {self.repeats}x within the last "
+                        f"{self.window} steps: {self._cycle_text(cycle)}."
+                    ),
+                    fatal=self.fatal,
+                )
+        return None
+
+
 class SemanticLoopDetector(Detector):
     """Same *intent* repeated, even when the wording differs.
 

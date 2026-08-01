@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from .config import config_bool, config_budget, config_float, config_int, load_config, section
 from .detectors import (
     Detector,
+    HandoffLoopDetector,
     LoopDetector,
     SemanticLoopDetector,
     StallDetector,
@@ -26,11 +27,21 @@ def default_detectors(
     exact_fatal: bool = True,
     stall_patience: int = 4,
     stall_fatal: bool = False,
+    handoff_repeats: int = 2,
+    handoff_window: int = 16,
+    handoff_max_cycle_length: int = 5,
+    handoff_fatal: bool = True,
 ) -> list[Detector]:
     """Cheap live defaults: exact repeated tool calls and no-progress warnings."""
     return [
         LoopDetector(threshold=exact_threshold, window=exact_window, fatal=exact_fatal),
         StallDetector(patience=stall_patience, fatal=stall_fatal),
+        HandoffLoopDetector(
+            repeats=handoff_repeats,
+            window=handoff_window,
+            max_cycle_length=handoff_max_cycle_length,
+            fatal=handoff_fatal,
+        ),
     ]
 
 
@@ -42,6 +53,10 @@ def configured_detectors(config: dict) -> list[Detector]:
         exact_fatal=config_bool(config, "exact_fatal", True),
         stall_patience=config_int(config, "stall_patience", 4),
         stall_fatal=config_bool(config, "stall_fatal", False),
+        handoff_repeats=config_int(config, "handoff_repeats", 2),
+        handoff_window=config_int(config, "handoff_window", 16),
+        handoff_max_cycle_length=config_int(config, "handoff_max_cycle_length", 5),
+        handoff_fatal=config_bool(config, "handoff_fatal", True),
     )
     if config_bool(config, "semantic", False):
         detectors.append(
