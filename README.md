@@ -208,6 +208,15 @@ python -m loopguard.evals
 It grades the loop detectors against labeled stuck-agent cases and reports precision,
 recall, and F1. See `loopguard/evals.py`.
 
+## Test
+
+The core test suite is offline and uses fake agents/fake embeddings, so it does not need
+OpenAI, web search, or a running server.
+
+```bash
+python -m unittest discover -v
+```
+
 ## Roadmap
 
 LoopGuard is deliberately not a general AI eval SDK, dataset manager, judge system, cost
