@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -165,6 +166,91 @@ class IngestTests(unittest.TestCase):
         parsed = json.loads(proc.stdout)
         self.assertEqual(parsed["summary"]["looping"], 1)
         self.assertEqual(proc.stderr, "")
+
+
+class CheckCliTests(unittest.TestCase):
+    def test_check_fails_on_looping_by_default(self):
+        proc = subprocess.run(
+            [sys.executable, "-m", "loopguard.check", str(SAMPLE_TRACE)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Check: FAIL", proc.stdout)
+        self.assertIn("matched fail-on: looping", proc.stdout)
+        self.assertEqual(proc.stderr, "")
+
+    def test_check_passes_when_only_looping_fails_and_trace_is_clean(self):
+        clean_trace = {
+            "run_id": "clean-only",
+            "steps": [
+                {
+                    "agent": "research_agent",
+                    "tool": "web_search",
+                    "args": {"query": "pricing page"},
+                    "output": "found results",
+                },
+                {
+                    "agent": "writer_agent",
+                    "tool": "draft_report",
+                    "args": {"topic": "pricing"},
+                    "output": "draft ready",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "clean.json"
+            path.write_text(json.dumps(clean_trace))
+            proc = subprocess.run(
+                [sys.executable, "-m", "loopguard.check", str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("Check: PASS", proc.stdout)
+        self.assertEqual(proc.stderr, "")
+
+    def test_check_json_reports_matched_failures(self):
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "loopguard.check",
+                str(SAMPLE_TRACE),
+                "--fail-on",
+                "looping",
+                "--fail-on",
+                "stalled",
+                "--json",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        parsed = json.loads(proc.stdout)
+        self.assertEqual(proc.returncode, 1)
+        self.assertTrue(parsed["failed"])
+        self.assertEqual(parsed["matched_failures"], ["looping", "stalled"])
+        self.assertEqual(parsed["summary"]["with_alerts"], 2)
+        self.assertEqual(proc.stderr, "")
+
+    def test_check_bad_input_exits_two(self):
+        proc = subprocess.run(
+            [sys.executable, "-m", "loopguard.check", str(ROOT / "missing.json"), "--json"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("LoopGuard check error", proc.stderr)
 
 
 class EmbeddingMathTests(unittest.TestCase):
