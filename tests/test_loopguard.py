@@ -303,6 +303,85 @@ class CheckCliTests(unittest.TestCase):
         self.assertIn("max_tool_calls", proc.stdout)
         self.assertIn("Check: FAIL", proc.stdout)
 
+    def test_check_uses_simple_yaml_config(self):
+        config = "\n".join(
+            [
+                "fail_on:",
+                "  - stalled",
+                "max_steps: 10",
+                "max_tool_calls: 10",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text(config)
+            proc = subprocess.run(
+                [sys.executable, "-m", "loopguard.check", str(SAMPLE_TRACE), "--config", str(path), "--json"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        parsed = json.loads(proc.stdout)
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(parsed["fail_on"], ["stalled"])
+        self.assertEqual(parsed["matched_failures"], ["stalled"])
+        self.assertEqual(parsed["budgets"], {"max_steps": 10, "max_tool_calls": 10})
+        self.assertEqual(parsed["budget_violations"], [])
+
+    def test_check_cli_overrides_config(self):
+        config = "\n".join(
+            [
+                "fail_on:",
+                "  - stalled",
+                "max_steps: 2",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text(config)
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "loopguard.check",
+                    str(SAMPLE_TRACE),
+                    "--config",
+                    str(path),
+                    "--fail-on",
+                    "looping",
+                    "--max-steps",
+                    "10",
+                    "--json",
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        parsed = json.loads(proc.stdout)
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(parsed["fail_on"], ["looping"])
+        self.assertEqual(parsed["matched_failures"], ["looping"])
+        self.assertEqual(parsed["budgets"]["max_steps"], 10)
+        self.assertEqual(parsed["budget_violations"], [])
+
+    def test_check_bad_config_exits_two(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text("fail_on: nope")
+            proc = subprocess.run(
+                [sys.executable, "-m", "loopguard.check", str(SAMPLE_TRACE), "--config", str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("invalid fail_on", proc.stderr)
+
 
 class EmbeddingMathTests(unittest.TestCase):
     def test_cosine_similarity(self):

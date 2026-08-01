@@ -33,6 +33,105 @@ def matched_failures(summary: dict[str, int], fail_on: set[str]) -> list[str]:
     return matched
 
 
+def parse_scalar(value: str):
+    """Parse the tiny scalar set used by LoopGuard config files."""
+    value = value.strip()
+    if value in {"", "null", "None", "~"}:
+        return None
+    if value in {"true", "True"}:
+        return True
+    if value in {"false", "False"}:
+        return False
+    try:
+        return int(value)
+    except ValueError:
+        return value.strip("\"'")
+
+
+def parse_simple_yaml(text: str) -> dict:
+    """Parse the small loopguard.yml shape without adding a YAML dependency.
+
+    Supports top-level keys, one-level nested mappings, and list items. This is not a
+    general YAML parser; it is just enough for simple local/CI config.
+    """
+    data: dict = {}
+    current_key: str | None = None
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+
+        if stripped.startswith("- "):
+            if current_key is None:
+                raise ValueError("list item without a parent key")
+            if not isinstance(data.get(current_key), list):
+                data[current_key] = []
+            data[current_key].append(parse_scalar(stripped[2:]))
+            continue
+
+        if ":" not in stripped:
+            raise ValueError(f"invalid config line: {raw}")
+
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if indent == 0:
+            current_key = key
+            data[key] = {} if value == "" else parse_scalar(value)
+            continue
+
+        if current_key is None:
+            raise ValueError(f"nested key without a parent: {raw}")
+        if not isinstance(data.get(current_key), dict):
+            raise ValueError(f"cannot add nested key under {current_key}")
+        data[current_key][key] = parse_scalar(value)
+    return data
+
+
+def load_config(path: str | None) -> dict:
+    """Load JSON or small YAML check config."""
+    if path is None:
+        return {}
+    config_path = Path(path)
+    text = config_path.read_text()
+    if config_path.suffix.lower() == ".json":
+        loaded = json.loads(text)
+    else:
+        loaded = parse_simple_yaml(text)
+    if not isinstance(loaded, dict):
+        raise ValueError("config must be a mapping")
+    return loaded.get("check", loaded)
+
+
+def config_fail_on(config: dict) -> set[str] | None:
+    raw = config.get("fail_on")
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, list):
+        values = raw
+    else:
+        raise ValueError("fail_on must be a string or list")
+
+    invalid = [value for value in values if value not in FAIL_CHOICES]
+    if invalid:
+        raise ValueError(f"invalid fail_on value(s): {', '.join(map(str, invalid))}")
+    return set(values)
+
+
+def config_budget(config: dict, key: str) -> int | None:
+    budgets = config.get("budgets", {})
+    raw = config.get(key)
+    if raw is None and isinstance(budgets, dict):
+        raw = budgets.get(key)
+    if raw is None:
+        return None
+    return positive_int(str(raw))
+
+
 def budget_violations(
     reports_by_source: list[tuple[Path, list[TraceReport]]],
     max_steps: int | None = None,
@@ -142,6 +241,7 @@ def positive_int(value: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = ArgumentParser(description="Fail when saved agent traces are stuck.")
     parser.add_argument("paths", nargs="+", help="JSON trace file(s) to analyze")
+    parser.add_argument("--config", help="optional JSON or simple YAML config file")
     parser.add_argument(
         "--fail-on",
         action="append",
@@ -158,14 +258,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="print a machine-readable report")
     args = parser.parse_args(argv)
 
-    fail_on = set(args.fail_on or ["looping"])
     try:
+        config = load_config(args.config)
+        fail_on = set(args.fail_on) if args.fail_on is not None else (config_fail_on(config) or {"looping"})
+        max_steps = args.max_steps if args.max_steps is not None else config_budget(config, "max_steps")
+        max_tool_calls = (
+            args.max_tool_calls
+            if args.max_tool_calls is not None
+            else config_budget(config, "max_tool_calls")
+        )
         reports_by_source = [(Path(path), analyze_file(path)) for path in args.paths]
         report = check_report(
             reports_by_source,
             fail_on,
-            max_steps=args.max_steps,
-            max_tool_calls=args.max_tool_calls,
+            max_steps=max_steps,
+            max_tool_calls=max_tool_calls,
         )
     except Exception as exc:  # noqa: BLE001 - this is a CLI boundary
         print(f"LoopGuard check error: {type(exc).__name__}: {exc}", file=sys.stderr)
