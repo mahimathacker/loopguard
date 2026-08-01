@@ -6,7 +6,13 @@ import unittest
 from pathlib import Path
 
 from loopguard import LoopGuard
-from loopguard.detectors import LoopDetector, SemanticLoopDetector, StallDetector
+from loopguard.detectors import (
+    LoopDetector,
+    SemanticLoopDetector,
+    StallDetector,
+    StepBudgetDetector,
+    ToolCallBudgetDetector,
+)
 from loopguard.embeddings import cosine
 from loopguard.ingest import analyze_file, human_summary, json_report
 from loopguard.metrics import Metrics
@@ -78,6 +84,27 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(monitor.alerts[-1].detector, "StallDetector")
         self.assertFalse(monitor.alerts[-1].fatal)
 
+    def test_step_budget_detector_interrupts_after_limit(self):
+        monitor = Monitor([StepBudgetDetector(max_steps=2)])
+
+        for i in range(3):
+            monitor.observe("agent", f"step {i}", f"event:{i}")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.alerts[-1].detector, "StepBudgetDetector")
+        self.assertEqual(monitor.alerts[-1].kind, "step_budget")
+
+    def test_tool_call_budget_detector_interrupts_after_limit(self):
+        monitor = Monitor([ToolCallBudgetDetector(max_tool_calls=1)])
+
+        monitor.observe("agent", "decided: one", "tool:one()")
+        monitor.observe("tools", "observed: ok", "result:ok")
+        monitor.observe("agent", "decided: two", "tool:two()")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.alerts[-1].detector, "ToolCallBudgetDetector")
+        self.assertEqual(monitor.alerts[-1].kind, "tool_call_budget")
+
     def test_semantic_loop_detector_uses_meaning_not_exact_text(self):
         detector = SemanticLoopDetector(embedder=FakeEmbedder(), threshold=0.8)
         monitor = Monitor([detector])
@@ -111,6 +138,53 @@ class RunnerWrapperTests(unittest.TestCase):
         self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
         alert = next(msg for msg in messages if msg["type"] == "alert")
         self.assertEqual(alert["detector"], "LoopDetector")
+
+    def test_loopguard_stream_interrupts_on_live_step_budget(self):
+        chunks = [
+            {"agent": {"last_tool": "search", "last_args": {"query": "one"}}},
+            {"tools": {"last_result": "one"}},
+            {"agent": {"last_tool": "search", "last_args": {"query": "two"}}},
+        ]
+
+        messages = list(LoopGuard(max_steps=2).stream(FakeAgent(chunks), {"goal": "test"}))
+
+        alert = next(msg for msg in messages if msg["type"] == "alert")
+        self.assertEqual(alert["detector"], "StepBudgetDetector")
+        self.assertEqual(alert["kind"], "step_budget")
+        self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
+
+    def test_loopguard_stream_interrupts_on_live_tool_call_budget(self):
+        chunks = [
+            {"agent": {"last_tool": "search", "last_args": {"query": "one"}}},
+            {"tools": {"last_result": "one"}},
+            {"agent": {"last_tool": "search", "last_args": {"query": "two"}}},
+        ]
+
+        messages = list(LoopGuard(max_tool_calls=1).stream(FakeAgent(chunks), {"goal": "test"}))
+
+        alert = next(msg for msg in messages if msg["type"] == "alert")
+        self.assertEqual(alert["detector"], "ToolCallBudgetDetector")
+        self.assertEqual(alert["kind"], "tool_call_budget")
+        self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
+
+    def test_loopguard_from_config_uses_live_budgets(self):
+        config = "\n".join(
+            [
+                "live:",
+                "  max_steps: 2",
+                "  max_tool_calls: 5",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text(config)
+            guard = LoopGuard.from_config(str(path))
+
+        self.assertEqual(guard.max_steps, 2)
+        self.assertEqual(guard.max_tool_calls, 5)
+        self.assertIn("StepBudgetDetector", [type(item).__name__ for item in guard.detectors])
+        self.assertIn("ToolCallBudgetDetector", [type(item).__name__ for item in guard.detectors])
 
 
 class MetricsTests(unittest.TestCase):
@@ -306,10 +380,11 @@ class CheckCliTests(unittest.TestCase):
     def test_check_uses_simple_yaml_config(self):
         config = "\n".join(
             [
-                "fail_on:",
-                "  - stalled",
-                "max_steps: 10",
-                "max_tool_calls: 10",
+                "check:",
+                "  fail_on:",
+                "    - stalled",
+                "  max_steps: 10",
+                "  max_tool_calls: 10",
             ]
         )
 

@@ -99,6 +99,49 @@ class StallDetector(Detector):
         return None
 
 
+class StepBudgetDetector(Detector):
+    """Interrupt when a run exceeds a maximum number of recorded events."""
+
+    name = "StepBudgetDetector"
+
+    def __init__(self, max_steps: int) -> None:
+        self.max_steps = max_steps
+
+    def inspect(self, event: Event, history: list[Event]) -> Alert | None:
+        if len(history) > self.max_steps:
+            return Alert(
+                detector=self.name,
+                kind="step_budget",
+                message=f"Run exceeded step budget: {len(history)} > {self.max_steps}.",
+            )
+        return None
+
+
+class ToolCallBudgetDetector(Detector):
+    """Interrupt when a run exceeds a maximum number of tool-call decisions."""
+
+    name = "ToolCallBudgetDetector"
+
+    def __init__(self, max_tool_calls: int) -> None:
+        self.max_tool_calls = max_tool_calls
+
+    def inspect(self, event: Event, history: list[Event]) -> Alert | None:
+        if not event.signature.startswith("tool:"):
+            return None
+
+        tool_calls = sum(1 for item in history if item.signature.startswith("tool:"))
+        if tool_calls > self.max_tool_calls:
+            return Alert(
+                detector=self.name,
+                kind="tool_call_budget",
+                message=(
+                    f"Run exceeded tool-call budget: {tool_calls} > "
+                    f"{self.max_tool_calls}."
+                ),
+            )
+        return None
+
+
 class SemanticLoopDetector(Detector):
     """Same *intent* repeated, even when the wording differs.
 

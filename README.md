@@ -166,7 +166,7 @@ guard = LoopGuard(detectors=[
     LoopDetector(),
     SemanticLoopDetector(),
     StallDetector(),
-])
+], max_steps=40, max_tool_calls=15)
 
 for msg in guard.stream(my_agent, my_input):
     if msg["type"] == "alert" and msg["fatal"]:
@@ -215,6 +215,21 @@ budgets always fail the check when exceeded.
 For CI, you can keep the same policy in a small `loopguard.yml`:
 
 ```yaml
+live:
+  max_steps: 40
+  max_tool_calls: 15
+
+check:
+  fail_on:
+    - looping
+    - stalled
+  max_steps: 40
+  max_tool_calls: 15
+```
+
+For check-only config, top-level keys also work:
+
+```yaml
 fail_on:
   - looping
   - stalled
@@ -261,14 +276,14 @@ question: **did my agent get stuck?**
 - A small `LoopGuard` live wrapper for compiled LangGraph agents.
 - Local stuck-run JSON reports for saved traces.
 - CI-friendly saved-trace check mode with exit codes and simple step/tool-call budgets.
-- Simple `loopguard.yml` config for saved-trace check policies.
+- Simple `loopguard.yml` config for saved-trace and live budget policies.
 - Small detector-quality harness (precision/recall/F1).
 - Offline trace analyzer for external agents (`loopguard/ingest.py`).
 
 ### Next (v0.x)
 
-- **Live policy configuration**: use the same fail/warn/budget rules around live guarded
-  runs, not only saved trace replay.
+- **Detector policy configuration**: move detector thresholds and warn/interrupt behavior
+  into config, beyond the current budget-only live config.
 - **Agent handoff loop detector** for multi-agent and swarm setups: catch loops that span
   several agents (A calls B calls C calls A) where no single agent looks stuck. The trace
   adapter already carries the `caller` field this needs.

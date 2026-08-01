@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from .detectors import Detector, LoopDetector, StallDetector
+from .config import config_budget, load_config, section
+from .detectors import (
+    Detector,
+    LoopDetector,
+    StallDetector,
+    StepBudgetDetector,
+    ToolCallBudgetDetector,
+)
 
 
 def default_detectors() -> list[Detector]:
@@ -28,9 +35,33 @@ class LoopGuard:
         self,
         detectors: list[Detector] | None = None,
         recursion_limit: int = 50,
+        max_steps: int | None = None,
+        max_tool_calls: int | None = None,
     ) -> None:
-        self.detectors = detectors if detectors is not None else default_detectors()
+        self.detectors = list(detectors) if detectors is not None else default_detectors()
         self.recursion_limit = recursion_limit
+        self.max_steps = max_steps
+        self.max_tool_calls = max_tool_calls
+        if max_steps is not None:
+            self.detectors.append(StepBudgetDetector(max_steps))
+        if max_tool_calls is not None:
+            self.detectors.append(ToolCallBudgetDetector(max_tool_calls))
+
+    @classmethod
+    def from_config(
+        cls,
+        path: str,
+        detectors: list[Detector] | None = None,
+        recursion_limit: int = 50,
+    ) -> "LoopGuard":
+        """Create a live guard from ``loopguard.yml`` budget settings."""
+        config = section(load_config(path), "live")
+        return cls(
+            detectors=detectors,
+            recursion_limit=recursion_limit,
+            max_steps=config_budget(config, "max_steps"),
+            max_tool_calls=config_budget(config, "max_tool_calls"),
+        )
 
     def stream(
         self,
