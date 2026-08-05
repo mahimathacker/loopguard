@@ -157,8 +157,28 @@ python main.py trap       # real agent, loops and gets caught
 
 ## Use LoopGuard on your own agent
 
-LoopGuard is not tied to these demos. Wrap any compiled LangGraph agent with the live
-guard and read the stream of messages it produces:
+LoopGuard is not tied to these demos. For live LangGraph/LangChain runs, attach the
+callback handler to the run config:
+
+```python
+from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
+
+handler = LoopGuardCallbackHandler()
+
+try:
+    result = agent.invoke(my_input, config={"callbacks": [handler]})
+except LoopGuardInterrupt as exc:
+    print("loop detected:", exc)
+
+print(handler.report())
+```
+
+The handler records tool starts, tool results, and tool errors, then raises
+`LoopGuardInterrupt` when a fatal detector fires. Use `interrupt_on_fatal=False` if you
+want to collect alerts without stopping the run.
+
+For demos or cases where you want LoopGuard to drive the stream itself, wrap any compiled
+LangGraph agent with the live guard and read the stream of messages it produces:
 
 ```python
 from loopguard import LoopGuard
@@ -293,6 +313,7 @@ question: **did my agent get stuck?**
   (multi-agent handoff cycles).
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
 - A small `LoopGuard` live wrapper for compiled LangGraph agents.
+- A `LoopGuardCallbackHandler` for attaching LoopGuard to LangGraph/LangChain live runs.
 - Local stuck-run JSON reports for saved traces.
 - CI-friendly saved-trace check mode with exit codes and simple step/tool-call budgets.
 - Simple `loopguard.yml` config for saved-trace checks and live detector/budget policies.
@@ -301,9 +322,8 @@ question: **did my agent get stuck?**
 
 ### Next (v0.x)
 
-- **Callback-based SDK for LangGraph (`LoopGuardCallbackHandler`)**: a cleaner integration
-  that emits an event per tool call and lets LoopGuard monitor and interrupt a real run in
-  process.
+- **Real trace tuning**: calibrate thresholds and false positives against production swarm
+  traces, especially paraphrase loops and handoff cycles.
 
 ### Later
 
@@ -323,6 +343,7 @@ agent-loop/
     detectors.py      loop, semantic loop, stall, budget, and handoff detectors
     monitor.py        runs detectors over the live trace
     guard.py          small public LoopGuard wrapper for live runs
+    langgraph.py      callback handler for LangGraph/LangChain live runs
     embeddings.py     OpenAI embeddings for semantic detection
     agent.py          demo agents (scripted) and the real gpt-4o-mini agent
     scenarios.py      the four named scenarios

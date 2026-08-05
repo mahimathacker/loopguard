@@ -16,6 +16,7 @@ from loopguard.detectors import (
 )
 from loopguard.embeddings import cosine
 from loopguard.ingest import analyze_file, analyze_trace, human_summary, json_report
+from loopguard.langgraph import LoopGuardCallbackHandler, LoopGuardInterrupt
 from loopguard.metrics import Metrics
 from loopguard.monitor import Monitor
 from loopguard.tracer import Event
@@ -277,6 +278,76 @@ class RunnerWrapperTests(unittest.TestCase):
         self.assertEqual(semantic.window, 8)
         self.assertEqual(semantic.min_repeats, 4)
         self.assertFalse(semantic.fatal)
+
+
+class CallbackHandlerTests(unittest.TestCase):
+    def test_callback_handler_is_public_export(self):
+        from loopguard import LoopGuardCallbackHandler as PublicHandler
+
+        self.assertIs(PublicHandler, LoopGuardCallbackHandler)
+
+    def test_callback_handler_records_tool_events(self):
+        handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
+
+        handler.on_tool_start({"name": "search"}, "pricing page")
+        handler.on_tool_end("found results")
+
+        self.assertEqual([msg["type"] for msg in handler.messages], ["event", "event"])
+        self.assertEqual(handler.events[0]["signature"], "tool:search(input=pricing page)")
+        self.assertEqual(handler.events[1]["signature"], "result:found results")
+        self.assertEqual(handler.metrics()["tool_calls"], 1)
+
+    def test_callback_handler_raises_on_fatal_loop(self):
+        handler = LoopGuardCallbackHandler(interrupt_on_fatal=True)
+
+        handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+        handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+        with self.assertRaises(LoopGuardInterrupt) as caught:
+            handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+
+        self.assertEqual(caught.exception.alert.detector, "LoopDetector")
+        self.assertTrue(handler.should_interrupt)
+
+    def test_callback_handler_can_collect_alerts_without_raising(self):
+        handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
+
+        for _ in range(3):
+            handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+
+        report = handler.report()
+
+        self.assertTrue(report["interrupted"])
+        self.assertEqual(report["alerts"][0]["detector"], "LoopDetector")
+        self.assertEqual(report["metrics"]["tool_calls"], 3)
+
+    def test_callback_handler_records_tool_errors_as_observations(self):
+        handler = LoopGuardCallbackHandler(detectors=[StallDetector(patience=2)])
+
+        handler.on_tool_error(RuntimeError("rate limited"))
+        handler.on_tool_error(RuntimeError("rate limited"))
+
+        self.assertEqual(handler.alerts[-1].detector, "StallDetector")
+        self.assertFalse(handler.should_interrupt)
+
+    def test_callback_handler_from_config_uses_live_policy(self):
+        config = "\n".join(
+            [
+                "live:",
+                "  exact_threshold: 5",
+                "  max_tool_calls: 2",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loopguard.yml"
+            path.write_text(config)
+            handler = LoopGuardCallbackHandler.from_config(str(path), interrupt_on_fatal=False)
+
+        loop = next(item for item in handler.detectors if isinstance(item, LoopDetector))
+
+        self.assertEqual(loop.threshold, 5)
+        self.assertEqual(handler.max_tool_calls, 2)
+        self.assertIn("ToolCallBudgetDetector", [type(item).__name__ for item in handler.detectors])
 
 
 class MetricsTests(unittest.TestCase):

@@ -17,7 +17,15 @@ __version__ = "0.1.0"
 from .monitor import Monitor
 from .tracer import Tracer
 
-__all__ = ["LoopGuard", "Monitor", "Tracer", "stream_run", "__version__"]
+__all__ = [
+    "LoopGuard",
+    "LoopGuardCallbackHandler",
+    "LoopGuardInterrupt",
+    "Monitor",
+    "Tracer",
+    "stream_run",
+    "__version__",
+]
 
 
 def __getattr__(name: str):
@@ -26,6 +34,14 @@ def __getattr__(name: str):
         from .guard import LoopGuard
 
         return LoopGuard
+    if name == "LoopGuardCallbackHandler":
+        from .langgraph import LoopGuardCallbackHandler
+
+        return LoopGuardCallbackHandler
+    if name == "LoopGuardInterrupt":
+        from .langgraph import LoopGuardInterrupt
+
+        return LoopGuardInterrupt
     if name == "stream_run":
         from .runner import stream_run
 
