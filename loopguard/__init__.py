@@ -23,6 +23,11 @@ __all__ = [
     "LoopGuardInterrupt",
     "Monitor",
     "Tracer",
+    "DetectionSignal",
+    "GuardAction",
+    "GuardDecision",
+    "PolicyConfig",
+    "PolicyEngine",
     "stream_run",
     "__version__",
 ]
@@ -42,6 +47,14 @@ def __getattr__(name: str):
         from .langgraph import LoopGuardInterrupt
 
         return LoopGuardInterrupt
+    if name in {"DetectionSignal", "GuardAction", "GuardDecision"}:
+        from . import signals
+
+        return getattr(signals, name)
+    if name in {"PolicyConfig", "PolicyEngine"}:
+        from . import policy
+
+        return getattr(policy, name)
     if name == "stream_run":
         from .runner import stream_run
 

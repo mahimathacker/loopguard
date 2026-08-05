@@ -2,13 +2,13 @@
 
 LoopGuard detects when LangGraph agents get stuck.
 
-It traces each run and catches repeated tool calls, semantic/paraphrase loops, and
-no-progress behavior before an agent wastes time and tokens. Use it today while developing
-LangGraph agents or replaying saved traces. CI check mode is planned next, so teams can
-fail a change when a known task starts looping.
+It combines repeated or cyclic actions, stagnant results, repeated failures, and lack of
+progress to decide whether an agent should continue, warn, replan, or stop. Use it today
+while developing LangGraph agents, attaching a callback to live LangChain/LangGraph runs,
+or replaying saved traces in a local check.
 
-It works on the demo agents in this repo, includes a small `LoopGuard` live wrapper, and
-can replay saved JSON traces. A cleaner callback-based SDK is planned next.
+It works on the demo agents in this repo, includes a small `LoopGuard` live wrapper, ships
+with a `LoopGuardCallbackHandler`, and can replay saved JSON traces.
 
 ## Why this exists
 
@@ -20,30 +20,35 @@ when this happens.
 
 ## How it works
 
-LoopGuard stays narrow: record what the agent did, detect stuck behavior, and report the
-result. It has three parts, one for each job:
+LoopGuard stays narrow: record what the agent did, detect stuck behavior, and make a
+small runtime decision. It has four parts:
 
 | Part | Job | File |
 |------|-----|------|
 | Tracer | Records every step as an event. The ordered list of events is the trace. | `loopguard/tracer.py` |
 | Metrics | Turns the trace into numbers: total steps, tool calls, repeat rate. | `loopguard/metrics.py` |
-| Monitor | Runs detectors over the live trace and interrupts the agent when one fires. | `loopguard/monitor.py`, `loopguard/detectors.py` |
+| Detectors | Turn events into scored evidence signals. | `loopguard/detectors.py`, `loopguard/signals.py` |
+| Policy | Combines signals into continue/warn/replan/pause/stop decisions. | `loopguard/policy.py`, `loopguard/monitor.py` |
 
 The flow is one direction:
 
 ```
-LangGraph agent --stream--> Tracer --events--> Monitor --> detectors --> alert --> interrupt
+Agent event --> Tracer --> Detectors --> signals --> Policy --> decision
 ```
 
-There are four behavior detectors today:
+There are seven behavior detectors/signals today:
 
-- `LoopDetector`: catches the same tool call with the same arguments repeated three times.
+- `LoopDetector`: reports repeated normalized tool calls as evidence.
 - `SemanticLoopDetector`: catches the same intent repeated in different words, using OpenAI
   embeddings. This catches loops that exact matching misses.
-- `StallDetector`: warns when the agent keeps observing the same result and stops making
-  progress. It is non-fatal today, so it reports a stall without interrupting the run.
+- `StallDetector` and `ProgressDetector`: report stagnant observations and no progress.
+- `RepeatedFailureDetector`: separates retryable failures from likely permanent failures.
+- `CycleDetector`: catches repeating action sequences such as search -> summarize -> search.
 - `HandoffLoopDetector`: catches repeated closed handoff cycles across agents, such as
   planner -> researcher -> reviewer -> planner.
+
+Detectors do not make the final execution decision alone. The policy engine combines
+signals so repeated action can warn, while repeated action plus stagnant output can stop.
 
 ## The four scenarios
 
@@ -173,9 +178,10 @@ except LoopGuardInterrupt as exc:
 print(handler.report())
 ```
 
-The handler records tool starts, tool results, and tool errors, then raises
-`LoopGuardInterrupt` when a fatal detector fires. Use `interrupt_on_fatal=False` if you
-want to collect alerts without stopping the run.
+The handler records tool starts, tool results, and tool errors, then emits events,
+signals, decisions, legacy alerts, and metrics. It raises `LoopGuardInterrupt` when the
+policy decides to stop. Use `interrupt_on_fatal=False` if you want to collect decisions
+without stopping the run.
 
 For demos or cases where you want LoopGuard to drive the stream itself, wrap any compiled
 LangGraph agent with the live guard and read the stream of messages it produces:
@@ -290,6 +296,10 @@ python -m loopguard.evals
 It grades the loop detectors against labeled stuck-agent cases and reports precision,
 recall, and F1. See `loopguard/evals.py`.
 
+The v0.2 fixture in `examples/v02_labeled_traces.json` covers healthy polling,
+pagination, retryable recovery, permanent failures, exact loops, alternating cycles, and
+multi-agent handoff cycles.
+
 ## Test
 
 The core test suite is offline and uses fake agents/fake embeddings, so it does not need
@@ -308,9 +318,9 @@ question: **did my agent get stuck?**
 ### Available now (v0)
 
 - Tracing, live metrics, and runtime interruption for a single LangGraph agent.
-- Four behavior detectors: `LoopDetector` (exact repeats), `SemanticLoopDetector`
-  (paraphrase loops), `StallDetector` (no progress), and `HandoffLoopDetector`
-  (multi-agent handoff cycles).
+- Progress-aware policy decisions: continue, warn, replan, pause, or stop.
+- Behavior detectors for exact repeats, semantic loops, stalls/no progress, repeated
+  failures, action cycles, handoff cycles, and hard budgets.
 - Four runnable scenarios, a FastAPI server, and a Next.js UI.
 - A small `LoopGuard` live wrapper for compiled LangGraph agents.
 - A `LoopGuardCallbackHandler` for attaching LoopGuard to LangGraph/LangChain live runs.
@@ -340,8 +350,10 @@ agent-loop/
   loopguard/          the library
     tracer.py         records events (the trace)
     metrics.py        derives numbers from the trace
-    detectors.py      loop, semantic loop, stall, budget, and handoff detectors
-    monitor.py        runs detectors over the live trace
+    signals.py        DetectionSignal, GuardDecision, GuardAction
+    policy.py         combines signals into runtime decisions
+    detectors.py      loop, progress, failure, cycle, budget, and handoff detectors
+    monitor.py        records events, collects signals, and stores decisions
     guard.py          small public LoopGuard wrapper for live runs
     langgraph.py      callback handler for LangGraph/LangChain live runs
     embeddings.py     OpenAI embeddings for semantic detection

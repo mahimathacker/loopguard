@@ -6,6 +6,8 @@ the same stream of messages, so there is no duplicated run logic.
 
 stream_run() yields plain dicts, each tagged with a "type":
     {"type": "event",   ...Event fields}      one node executed
+    {"type": "signal",  ...DetectionSignal}   evidence from a detector
+    {"type": "decision", ...GuardDecision}     policy decision for the current trace
     {"type": "alert",   ...Alert fields}      a detector fired
     {"type": "metrics", ...Metrics fields}    final summary
     {"type": "done",    "interrupted": bool}  run finished
@@ -26,6 +28,7 @@ except ModuleNotFoundError:  # lets fake-agent tests run without LangGraph insta
 from .detectors import Detector
 from .metrics import Metrics
 from .monitor import Monitor
+from .signals import GuardDecision
 
 
 def tool_signature(tool: str, args: dict) -> str:
@@ -76,6 +79,12 @@ def _interpret_messages(messages: list) -> tuple[str, str, dict] | None:
     # otherwise it is the model's final answer (no tool calls) -> the run is finishing
     content = str(getattr(msg, "content", "")).strip().replace("\n", " ")[:200]
     return f"answered: {content}", f"final:{content}", {"final": content}
+
+
+def _decision_message(decision: GuardDecision) -> dict:
+    payload = asdict(decision)
+    payload["action"] = decision.action.value
+    return {"type": "decision", **payload}
     
 
 def stream_run(
@@ -98,9 +107,12 @@ def stream_run(
                     continue
                 action, sig, payload = interpreted
 
-                alerts = monitor.observe(node, action, sig, **payload)
-                yield {"type": "event", **monitor.tracer.events[-1].as_dict()}
-                for alert in alerts:
+                result = monitor.observe_decision(node, action, sig, **payload)
+                yield {"type": "event", **result.event.as_dict()}
+                for signal in result.signals:
+                    yield {"type": "signal", **asdict(signal)}
+                yield _decision_message(result.decision)
+                for alert in result.alerts:
                     yield {"type": "alert", **asdict(alert)}
 
             if monitor.should_interrupt:

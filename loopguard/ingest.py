@@ -30,8 +30,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .detectors import Alert, Detector, HandoffLoopDetector, LoopDetector, StallDetector
+from .detectors import (
+    Alert,
+    CycleDetector,
+    Detector,
+    HandoffLoopDetector,
+    LoopDetector,
+    ProgressDetector,
+    RepeatedFailureDetector,
+    StallDetector,
+)
 from .monitor import Monitor
+from .signals import GuardAction, GuardDecision
 
 
 # Each external field can arrive under several names depending on whose agent emitted
@@ -65,12 +75,13 @@ class TraceReport:
     steps: int                                   # external steps in the trace
     events: int                                  # internal Events produced (>= steps)
     tool_calls: int = 0                          # internal tool-call observations
+    decisions: list[GuardDecision] = field(default_factory=list)
     alerts: list[Alert] = field(default_factory=list)
 
     @property
     def looped(self) -> bool:
         """Did any fatal detector (a real loop) fire on this run?"""
-        return any(a.fatal for a in self.alerts)
+        return any(decision.action == GuardAction.STOP for decision in self.decisions)
 
     def summary(self) -> str:
         head = f"run {self.run_id}: {self.steps} steps -> {self.events} events"
@@ -88,9 +99,15 @@ class TraceReport:
         """Single report status, with fatal loops taking priority over warnings."""
         if self.looped:
             return "looping"
-        if self.alerts:
+        if self.decisions and self.decisions[-1].action != GuardAction.CONTINUE:
             return "stalled"
         return "clean"
+
+    @property
+    def final_decision(self) -> GuardDecision | None:
+        if not self.decisions:
+            return None
+        return self.decisions[-1]
 
 
 def _steps_to_observations(steps: list[dict]) -> list[tuple[str, str, str, dict]]:
@@ -133,7 +150,14 @@ def analyze_trace(trace: dict, detectors: list[Detector] | None = None) -> Trace
     detectors = (
         detectors
         if detectors is not None
-        else [LoopDetector(), StallDetector(), HandoffLoopDetector()]
+        else [
+            LoopDetector(),
+            StallDetector(),
+            ProgressDetector(),
+            RepeatedFailureDetector(),
+            CycleDetector(),
+            HandoffLoopDetector(),
+        ]
     )
     for d in detectors:
         d.reset()
@@ -149,6 +173,7 @@ def analyze_trace(trace: dict, detectors: list[Detector] | None = None) -> Trace
         steps=len(steps),
         events=len(observations),
         tool_calls=sum(1 for _, _, sig, _ in observations if sig.startswith("tool:")),
+        decisions=list(monitor.decisions),
         alerts=list(monitor.alerts),
     )
 
@@ -193,6 +218,14 @@ def json_report(path: str | Path, reports: list[TraceReport]) -> dict:
             "steps": report.steps,
             "events": report.events,
             "tool_calls": report.tool_calls,
+            "final_decision": (
+                {
+                    "action": report.final_decision.action.value,
+                    "risk_score": report.final_decision.risk_score,
+                }
+                if report.final_decision
+                else None
+            ),
             "alerts": _report_alerts(report.alerts),
         }
         for report in reports

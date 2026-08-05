@@ -14,6 +14,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from .embeddings import Embedder, OpenAIEmbedder, cosine
+from .signals import DetectionSignal
 from .tracer import Event
 
 
@@ -32,7 +33,7 @@ class Detector:
 
     name: str = "detector"
 
-    def inspect(self, event: Event, history: list[Event]) -> Alert | None:
+    def inspect(self, event: Event, history: list[Event]) -> DetectionSignal | Alert | None:
         raise NotImplementedError
 
     def reset(self) -> None:  # called at the start of each run
@@ -62,14 +63,21 @@ class LoopDetector(Detector):
         count = Counter(e.signature for e in recent)[event.signature]
 
         if count >= self.threshold:
-            return Alert(
+            return DetectionSignal(
                 detector=self.name,
-                kind="tool_loop",
+                kind="repeated_tool_call",
+                score=0.65,
                 message=(
                     f"Repeated tool call {count}x within the last {self.window} steps: "
                     f"{event.signature.removeprefix('tool:')}"
                 ),
-                fatal=self.fatal,
+                evidence={
+                    "repeat_count": count,
+                    "threshold": self.threshold,
+                    "window": self.window,
+                    "fatal_hint": self.fatal,
+                    "signature": event.signature,
+                },
             )
         return None
 
@@ -93,11 +101,17 @@ class StallDetector(Detector):
         results = [e for e in history if e.signature.startswith("result:")]
         tail = results[-self.patience:]
         if len(tail) >= self.patience and len({e.signature for e in tail}) == 1:
-            return Alert(
+            return DetectionSignal(
                 detector=self.name,
-                kind="stall",
+                kind="no_progress",
+                score=0.72,
                 message=f"No new information for {self.patience} consecutive observations.",
-                fatal=self.fatal,
+                evidence={
+                    "observations": len(tail),
+                    "patience": self.patience,
+                    "output_signature": event.signature,
+                    "fatal_hint": self.fatal,
+                },
             )
         return None
 
@@ -113,11 +127,16 @@ class StepBudgetDetector(Detector):
 
     def inspect(self, event: Event, history: list[Event]) -> Alert | None:
         if len(history) > self.max_steps:
-            return Alert(
+            return DetectionSignal(
                 detector=self.name,
                 kind="step_budget",
+                score=1.0,
                 message=f"Run exceeded step budget: {len(history)} > {self.max_steps}.",
-                fatal=self.fatal,
+                evidence={
+                    "actual": len(history),
+                    "limit": self.max_steps,
+                    "fatal_hint": self.fatal,
+                },
             )
         return None
 
@@ -137,14 +156,19 @@ class ToolCallBudgetDetector(Detector):
 
         tool_calls = sum(1 for item in history if item.signature.startswith("tool:"))
         if tool_calls > self.max_tool_calls:
-            return Alert(
+            return DetectionSignal(
                 detector=self.name,
                 kind="tool_call_budget",
+                score=1.0,
                 message=(
                     f"Run exceeded tool-call budget: {tool_calls} > "
                     f"{self.max_tool_calls}."
                 ),
-                fatal=self.fatal,
+                evidence={
+                    "actual": tool_calls,
+                    "limit": self.max_tool_calls,
+                    "fatal_hint": self.fatal,
+                },
             )
         return None
 
@@ -207,14 +231,139 @@ class HandoffLoopDetector(Detector):
                 continue
             expected = cycle * self.repeats
             if edges[-len(expected):] == expected:
-                return Alert(
+                return DetectionSignal(
                     detector=self.name,
                     kind="handoff_loop",
+                    score=0.88,
                     message=(
                         f"Repeated agent handoff cycle {self.repeats}x within the last "
                         f"{self.window} steps: {self._cycle_text(cycle)}."
                     ),
-                    fatal=self.fatal,
+                    evidence={
+                        "repeats": self.repeats,
+                        "window": self.window,
+                        "cycle": self._cycle_text(cycle),
+                        "fatal_hint": self.fatal,
+                    },
+                )
+        return None
+
+
+class ProgressDetector(Detector):
+    """Detect stagnant observations that make repetition more risky."""
+
+    name = "ProgressDetector"
+
+    def __init__(self, patience: int = 3) -> None:
+        self.patience = patience
+
+    def inspect(self, event: Event, history: list[Event]) -> DetectionSignal | None:
+        if not event.signature.startswith("result:"):
+            return None
+        results = [item for item in history if item.signature.startswith("result:")]
+        tail = results[-self.patience:]
+        if len(tail) < self.patience:
+            return None
+
+        outputs = [item.signature for item in tail]
+        text = event.signature.removeprefix("result:").strip().lower()
+        empty_or_failed = (
+            text in {"", "none", "null", "empty", "no results", "no result"}
+            or "no results" in text
+            or "error" in text
+            or "failed" in text
+        )
+        if len(set(outputs)) == 1 or empty_or_failed:
+            return DetectionSignal(
+                detector=self.name,
+                kind="no_progress",
+                score=0.78,
+                message=f"Recent observations show no clear progress across {len(tail)} results.",
+                evidence={
+                    "observations": len(tail),
+                    "output_signature": event.signature,
+                    "empty_or_failed": empty_or_failed,
+                },
+            )
+        return None
+
+
+class RepeatedFailureDetector(Detector):
+    """Distinguish repeated retryable failures from likely permanent failures."""
+
+    name = "RepeatedFailureDetector"
+
+    def __init__(self, attempts: int = 2) -> None:
+        self.attempts = attempts
+
+    def _failure_kind(self, text: str) -> tuple[str, float] | None:
+        lower = text.lower()
+        if any(token in lower for token in ("401", "403", "auth", "permission", "unauthorized")):
+            return "permanent_failure", 0.95
+        if any(token in lower for token in ("invalid", "bad request", "schema", "missing required")):
+            return "permanent_failure", 0.90
+        if any(token in lower for token in ("429", "rate limit", "timeout", "temporarily", "unavailable")):
+            return "retryable_failure", 0.55
+        if "error" in lower or "failed" in lower:
+            return "retryable_failure", 0.60
+        return None
+
+    def inspect(self, event: Event, history: list[Event]) -> DetectionSignal | None:
+        if not event.signature.startswith("result:"):
+            return None
+        failure = self._failure_kind(event.signature)
+        if failure is None:
+            return None
+
+        results = [item for item in history if item.signature == event.signature]
+        if len(results) < self.attempts:
+            return None
+
+        kind, score = failure
+        return DetectionSignal(
+            detector=self.name,
+            kind=kind,
+            score=score,
+            message=f"Repeated tool failure detected: {event.signature.removeprefix('result:')}",
+            evidence={
+                "attempts": len(results),
+                "threshold": self.attempts,
+                "retryable": kind == "retryable_failure",
+                "failure": event.signature,
+            },
+        )
+
+
+class CycleDetector(Detector):
+    """Detect repeating action sequences such as search -> summarize -> search -> summarize."""
+
+    name = "CycleDetector"
+
+    def __init__(self, max_cycle_length: int = 4, min_cycles: int = 2) -> None:
+        self.max_cycle_length = max_cycle_length
+        self.min_cycles = min_cycles
+
+    def inspect(self, event: Event, history: list[Event]) -> DetectionSignal | None:
+        actions = [
+            item.signature
+            for item in history
+            if item.signature.startswith(("tool:", "handoff:"))
+        ]
+        max_length = min(self.max_cycle_length, len(actions) // self.min_cycles)
+        for length in range(1, max_length + 1):
+            cycle = actions[-length:]
+            expected = cycle * self.min_cycles
+            if actions[-len(expected):] == expected and len(set(cycle)) > 1:
+                return DetectionSignal(
+                    detector=self.name,
+                    kind="cycle",
+                    score=0.78,
+                    message=f"Repeated action sequence detected: {' -> '.join(cycle)}.",
+                    evidence={
+                        "cycle": cycle,
+                        "cycle_length": length,
+                        "min_cycles": self.min_cycles,
+                    },
                 )
         return None
 
@@ -269,13 +418,19 @@ class SemanticLoopDetector(Detector):
 
         # similar counts the prior matches; +1 for the current decision itself.
         if similar >= self.min_repeats - 1:
-            return Alert(
+            return DetectionSignal(
                 detector=self.name,
                 kind="semantic_loop",
+                score=0.75,
                 message=(
                     f"{similar + 1} semantically similar tool calls within the last "
                     f"{self.window} steps (>= {self.threshold:.0%} similar) - a paraphrase loop."
                 ),
-                fatal=self.fatal,
+                evidence={
+                    "similar_count": similar + 1,
+                    "threshold": self.threshold,
+                    "window": self.window,
+                    "fatal_hint": self.fatal,
+                },
             )
         return None

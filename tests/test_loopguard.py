@@ -9,6 +9,9 @@ from loopguard import LoopGuard
 from loopguard.detectors import (
     HandoffLoopDetector,
     LoopDetector,
+    CycleDetector,
+    ProgressDetector,
+    RepeatedFailureDetector,
     SemanticLoopDetector,
     StallDetector,
     StepBudgetDetector,
@@ -19,11 +22,14 @@ from loopguard.ingest import analyze_file, analyze_trace, human_summary, json_re
 from loopguard.langgraph import LoopGuardCallbackHandler, LoopGuardInterrupt
 from loopguard.metrics import Metrics
 from loopguard.monitor import Monitor
+from loopguard.policy import PolicyEngine
+from loopguard.signals import DetectionSignal, GuardAction
 from loopguard.tracer import Event
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_TRACE = ROOT / "examples" / "sample_trace.json"
+V02_TRACE = ROOT / "examples" / "v02_labeled_traces.json"
 
 
 class FakeAgent:
@@ -45,7 +51,7 @@ class FakeEmbedder:
 
 
 class DetectorTests(unittest.TestCase):
-    def test_loop_detector_interrupts_on_third_identical_tool_call(self):
+    def test_loop_detector_warns_on_third_identical_tool_call_without_progress_evidence(self):
         monitor = Monitor([LoopDetector(threshold=3)])
 
         for _ in range(3):
@@ -57,9 +63,12 @@ class DetectorTests(unittest.TestCase):
                 last_args={"query": "pricing page"},
             )
 
-        self.assertTrue(monitor.should_interrupt)
+        self.assertFalse(monitor.should_interrupt)
+        self.assertEqual(monitor.signals[-1].detector, "LoopDetector")
+        self.assertEqual(monitor.signals[-1].kind, "repeated_tool_call")
         self.assertEqual(monitor.alerts[-1].detector, "LoopDetector")
-        self.assertEqual(monitor.alerts[-1].kind, "tool_loop")
+        self.assertEqual(monitor.alerts[-1].kind, "repeated_tool_call")
+        self.assertFalse(monitor.alerts[-1].fatal)
 
     def test_loop_detector_allows_two_retries(self):
         monitor = Monitor([LoopDetector(threshold=3)])
@@ -166,7 +175,7 @@ class DetectorTests(unittest.TestCase):
                 last_args={"query": query},
             )
 
-        self.assertTrue(monitor.should_interrupt)
+        self.assertFalse(monitor.should_interrupt)
         self.assertEqual(monitor.alerts[-1].detector, "SemanticLoopDetector")
         self.assertEqual(monitor.alerts[-1].kind, "semantic_loop")
 
@@ -186,6 +195,25 @@ class RunnerWrapperTests(unittest.TestCase):
         self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
         alert = next(msg for msg in messages if msg["type"] == "alert")
         self.assertEqual(alert["detector"], "LoopDetector")
+
+    def test_loopguard_stream_emits_signals_and_decisions(self):
+        chunks = [
+            {"agent": {"last_tool": "search", "last_args": {"query": "pricing page"}}},
+            {"tools": {"last_result": "no results"}},
+            {"agent": {"last_tool": "search", "last_args": {"query": "pricing page"}}},
+            {"tools": {"last_result": "no results"}},
+            {"agent": {"last_tool": "search", "last_args": {"query": "pricing page"}}},
+            {"tools": {"last_result": "no results"}},
+        ]
+
+        messages = list(LoopGuard().stream(FakeAgent(chunks), {"goal": "test"}))
+
+        self.assertIn("signal", [msg["type"] for msg in messages])
+        self.assertIn("decision", [msg["type"] for msg in messages])
+        self.assertEqual(
+            [msg for msg in messages if msg["type"] == "decision"][-1]["action"],
+            "stop",
+        )
 
     def test_loopguard_stream_interrupts_on_live_step_budget(self):
         chunks = [
@@ -292,7 +320,10 @@ class CallbackHandlerTests(unittest.TestCase):
         handler.on_tool_start({"name": "search"}, "pricing page")
         handler.on_tool_end("found results")
 
-        self.assertEqual([msg["type"] for msg in handler.messages], ["event", "event"])
+        self.assertEqual(
+            [msg["type"] for msg in handler.messages],
+            ["event", "decision", "event", "decision"],
+        )
         self.assertEqual(handler.events[0]["signature"], "tool:search(input=pricing page)")
         self.assertEqual(handler.events[1]["signature"], "result:found results")
         self.assertEqual(handler.metrics()["tool_calls"], 1)
@@ -300,10 +331,12 @@ class CallbackHandlerTests(unittest.TestCase):
     def test_callback_handler_raises_on_fatal_loop(self):
         handler = LoopGuardCallbackHandler(interrupt_on_fatal=True)
 
-        handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+        for _ in range(2):
+            handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+            handler.on_tool_end("no results")
         handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
         with self.assertRaises(LoopGuardInterrupt) as caught:
-            handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+            handler.on_tool_end("no results")
 
         self.assertEqual(caught.exception.alert.detector, "LoopDetector")
         self.assertTrue(handler.should_interrupt)
@@ -313,10 +346,12 @@ class CallbackHandlerTests(unittest.TestCase):
 
         for _ in range(3):
             handler.on_tool_start({"name": "search"}, {"query": "pricing page"})
+            handler.on_tool_end("no results")
 
         report = handler.report()
 
         self.assertTrue(report["interrupted"])
+        self.assertEqual(report["decisions"][-1]["action"], "stop")
         self.assertEqual(report["alerts"][0]["detector"], "LoopDetector")
         self.assertEqual(report["metrics"]["tool_calls"], 3)
 
@@ -350,6 +385,73 @@ class CallbackHandlerTests(unittest.TestCase):
         self.assertIn("ToolCallBudgetDetector", [type(item).__name__ for item in handler.detectors])
 
 
+class ProgressAwarePolicyTests(unittest.TestCase):
+    def test_policy_models_are_public_exports(self):
+        from loopguard import DetectionSignal as PublicSignal
+        from loopguard import GuardAction as PublicAction
+        from loopguard import PolicyEngine as PublicPolicy
+
+        self.assertIs(PublicSignal, DetectionSignal)
+        self.assertIs(PublicAction, GuardAction)
+        self.assertIs(PublicPolicy, PolicyEngine)
+
+    def test_policy_stops_on_repetition_plus_no_progress(self):
+        decision = PolicyEngine().decide(
+            [
+                DetectionSignal("LoopDetector", "repeated_tool_call", 0.65, "same search"),
+                DetectionSignal("ProgressDetector", "no_progress", 0.78, "same result"),
+            ]
+        )
+
+        self.assertEqual(decision.action, GuardAction.STOP)
+        self.assertGreaterEqual(decision.risk_score, 0.9)
+
+    def test_policy_allows_repeated_action_without_no_progress(self):
+        decision = PolicyEngine().decide(
+            [DetectionSignal("LoopDetector", "repeated_tool_call", 0.65, "same polling tool")]
+        )
+
+        self.assertEqual(decision.action, GuardAction.WARN)
+
+    def test_healthy_polling_continues_when_outputs_change(self):
+        monitor = Monitor([LoopDetector(threshold=3), ProgressDetector()])
+
+        for result in ["pending", "running", "completed"]:
+            monitor.observe("agent", "decided: poll_job({})", "tool:poll_job()")
+            monitor.observe("tools", f"observed: {result}", f"result:{result}")
+
+        self.assertFalse(monitor.should_interrupt)
+        self.assertNotEqual(monitor.decisions[-1].action, GuardAction.STOP)
+
+    def test_retryable_failure_then_success_does_not_stop(self):
+        monitor = Monitor([RepeatedFailureDetector(), ProgressDetector()])
+
+        monitor.observe("tools", "error: 429 rate limit", "result:429 rate limit")
+        monitor.observe("tools", "observed: success", "result:success")
+
+        self.assertFalse(monitor.should_interrupt)
+        self.assertEqual(monitor.decisions[-1].action, GuardAction.CONTINUE)
+
+    def test_permanent_failure_stops_before_many_retries(self):
+        monitor = Monitor([RepeatedFailureDetector(attempts=2)])
+
+        monitor.observe("tools", "error: 401 unauthorized", "result:401 unauthorized")
+        monitor.observe("tools", "error: 401 unauthorized", "result:401 unauthorized")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.decisions[-1].action, GuardAction.STOP)
+
+    def test_alternating_cycle_with_no_progress_stops(self):
+        monitor = Monitor([CycleDetector(max_cycle_length=2), ProgressDetector()])
+
+        for tool in ["search", "summarize", "search", "summarize"]:
+            monitor.observe("agent", f"decided: {tool}({{}})", f"tool:{tool}()")
+            monitor.observe("tools", "observed: no results", "result:no results")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(monitor.decisions[-1].action, GuardAction.STOP)
+
+
 class MetricsTests(unittest.TestCase):
     def test_metrics_count_tool_repeats(self):
         events = [
@@ -381,7 +483,7 @@ class IngestTests(unittest.TestCase):
         )
         self.assertEqual([run["status"] for run in report["runs"]], ["looping", "stalled", "clean"])
         self.assertEqual([run["tool_calls"] for run in report["runs"]], [4, 4, 3])
-        self.assertEqual(report["runs"][0]["alerts"][0]["type"], "loop")
+        self.assertIn("loop", [alert["type"] for alert in report["runs"][0]["alerts"]])
         self.assertEqual(report["runs"][1]["alerts"][0]["type"], "warn")
 
     def test_human_summary_separates_looping_from_stalled(self):
@@ -422,6 +524,18 @@ class IngestTests(unittest.TestCase):
 
         self.assertEqual(report.status, "looping")
         self.assertEqual(report.alerts[-1].detector, "HandoffLoopDetector")
+
+    def test_v02_labeled_traces_match_expected_final_decisions(self):
+        data = json.loads(V02_TRACE.read_text())
+        self.assertGreaterEqual(len(data), 5)
+
+        reports = {report.run_id: report for report in analyze_file(V02_TRACE)}
+
+        for trace in data:
+            report = reports[trace["run_id"]]
+            final = report.final_decision
+            self.assertIsNotNone(final)
+            self.assertEqual(final.action.value, trace["expected_decision"])
 
 
 class CheckCliTests(unittest.TestCase):

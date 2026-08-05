@@ -23,14 +23,22 @@ from .guard import configured_detectors, default_detectors
 from .metrics import Metrics
 from .monitor import Monitor
 from .runner import tool_signature
+from .signals import GuardDecision, GuardAction
 
 
 class LoopGuardInterrupt(RuntimeError):
     """Raised by the callback handler when a fatal detector should stop a live run."""
 
-    def __init__(self, alert: Alert) -> None:
+    def __init__(self, alert: Alert | None = None, decision: GuardDecision | None = None) -> None:
         self.alert = alert
-        super().__init__(alert.message)
+        self.decision = decision
+        if alert is not None:
+            message = alert.message
+        elif decision is not None and decision.reasons:
+            message = decision.reasons[-1].message
+        else:
+            message = "LoopGuard policy decided to stop the run."
+        super().__init__(message)
 
 
 def _tool_name(serialized: dict | None, fallback: str = "tool") -> str:
@@ -128,25 +136,44 @@ class LoopGuardCallbackHandler(BaseCallbackHandler):
     def metrics(self) -> dict:
         return asdict(Metrics.from_events(self.monitor.tracer.events))
 
+    @property
+    def signals(self) -> list[dict]:
+        return [asdict(signal) for signal in self.monitor.signals]
+
+    @property
+    def decisions(self) -> list[dict]:
+        out: list[dict] = []
+        for decision in self.monitor.decisions:
+            payload = asdict(decision)
+            payload["action"] = decision.action.value
+            out.append(payload)
+        return out
+
     def report(self) -> dict:
         return {
             "interrupted": self.should_interrupt,
             "events": self.events,
+            "signals": self.signals,
+            "decisions": self.decisions,
             "alerts": [asdict(alert) for alert in self.alerts],
             "metrics": self.metrics(),
         }
 
     def _record(self, node: str, action: str, signature: str, **payload: Any) -> None:
-        alerts = self.monitor.observe(node, action, signature, **payload)
-        event_message = {"type": "event", **self.monitor.tracer.events[-1].as_dict()}
+        result = self.monitor.observe_decision(node, action, signature, **payload)
+        event_message = {"type": "event", **result.event.as_dict()}
         self.messages.append(event_message)
-        for alert in alerts:
+        for signal in result.signals:
+            self.messages.append({"type": "signal", **asdict(signal)})
+        decision_payload = asdict(result.decision)
+        decision_payload["action"] = result.decision.action.value
+        self.messages.append({"type": "decision", **decision_payload})
+        for alert in result.alerts:
             self.messages.append({"type": "alert", **asdict(alert)})
 
-        if self.interrupt_on_fatal:
-            fatal = next((alert for alert in alerts if alert.fatal), None)
-            if fatal is not None:
-                raise LoopGuardInterrupt(fatal)
+        if self.interrupt_on_fatal and result.decision.action == GuardAction.STOP:
+            fatal = next((alert for alert in result.alerts if alert.fatal), None)
+            raise LoopGuardInterrupt(fatal, result.decision)
 
     def on_tool_start(
         self,

@@ -12,8 +12,11 @@ from collections.abc import Iterator
 from .config import config_bool, config_budget, config_float, config_int, load_config, section
 from .detectors import (
     Detector,
+    CycleDetector,
     HandoffLoopDetector,
     LoopDetector,
+    ProgressDetector,
+    RepeatedFailureDetector,
     SemanticLoopDetector,
     StallDetector,
     StepBudgetDetector,
@@ -36,6 +39,9 @@ def default_detectors(
     return [
         LoopDetector(threshold=exact_threshold, window=exact_window, fatal=exact_fatal),
         StallDetector(patience=stall_patience, fatal=stall_fatal),
+        ProgressDetector(),
+        RepeatedFailureDetector(),
+        CycleDetector(),
         HandoffLoopDetector(
             repeats=handoff_repeats,
             window=handoff_window,
