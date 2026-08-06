@@ -104,7 +104,29 @@ the loop comes from the situation. `SemanticLoopDetector` catches it and stops t
 - An OpenAI API key for the `semantic`, `calc`, and `trap` scenarios. The `exact` scenario
   runs offline with no key.
 
+## Install
+
+The latest progress-aware version currently lives on the `develop` branch:
+
+```bash
+pip install "loopguard @ git+https://github.com/mahimathacker/loopguard.git@develop"
+```
+
+For live LangGraph/LangChain callback integration, install the LangGraph extra:
+
+```bash
+pip install "loopguard[langgraph] @ git+https://github.com/mahimathacker/loopguard.git@develop"
+```
+
+For the full local demo stack:
+
+```bash
+pip install "loopguard[demo,server] @ git+https://github.com/mahimathacker/loopguard.git@develop"
+```
+
 ## Setup
+
+Use this path when you are working from a cloned repo and want to run the demos/UI.
 
 ### 1. Backend (Python)
 

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loopguard"
+version = "0.2.0"
+description = "Progress-aware runtime guardrails for LangGraph and LangChain agents."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "Mahima Thacker" }
+]
+keywords = ["ai-agents", "langgraph", "langchain", "observability", "guardrails"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langgraph = [
+  "langchain-core>=0.3.0",
+  "langgraph>=0.2.0",
+]
+semantic = [
+  "openai>=1.0.0",
+]
+server = [
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.27.0",
+]
+demo = [
+  "ddgs>=9.0.0",
+  "langchain-core>=0.3.0",
+  "langchain-openai>=0.2.0",
+  "langgraph>=0.2.0",
+  "openai>=1.0.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+loopguard-check = "loopguard.check:main"
+loopguard-ingest = "loopguard.ingest:main"
+
+[tool.setuptools.packages.find]
+include = ["loopguard*"]

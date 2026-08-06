@@ -263,21 +263,27 @@ def human_summary(reports: list[TraceReport]) -> str:
     )
 
 
-if __name__ == "__main__":
-    # CLI:  python -m loopguard.ingest <trace.json>
-    # Uses offline detectors only (no API key needed). Add SemanticLoopDetector yourself
-    # when you want paraphrase-loop catching and have OPENAI_API_KEY set.
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for saved-trace analysis."""
     parser = ArgumentParser(description="Analyze saved agent traces for loops and stalls.")
     parser.add_argument("path", help="JSON trace file to analyze")
     parser.add_argument("--json", action="store_true", help="print a machine-readable report")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     reports = analyze_file(args.path)
     if args.json:
         print(json.dumps(json_report(args.path, reports), indent=2))
-        raise SystemExit(0)
+        return 0
 
     print(f"Analyzed {len(reports)} run(s) from {args.path}:\n")
     for r in reports:
         print(r.summary())
     print(f"\n{human_summary(reports)}")
+    return 0
+
+
+if __name__ == "__main__":
+    # CLI:  python -m loopguard.ingest <trace.json>
+    # Uses offline detectors only (no API key needed). Add SemanticLoopDetector yourself
+    # when you want paraphrase-loop catching and have OPENAI_API_KEY set.
+    raise SystemExit(main())
