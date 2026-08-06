@@ -12,7 +12,7 @@ Detectors (in detectors.py) are the runtime checks. LoopDetector is the headline
 SemanticLoopDetector and StallDetector catch paraphrase loops and no-progress runs.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .monitor import Monitor
 from .tracer import Tracer

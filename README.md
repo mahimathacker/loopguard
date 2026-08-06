@@ -26,7 +26,7 @@ pip install loopguard-runtime
 Or pin the current release:
 
 ```bash
-pip install loopguard-runtime==0.2.0
+pip install loopguard-runtime==0.2.1
 ```
 
 The package name is `loopguard-runtime`, but the Python import is `loopguard`:
@@ -271,9 +271,9 @@ python -m loopguard.evals
 
 ## Package Status
 
-`loopguard-runtime` v0.2.0 is published on PyPI:
+`loopguard-runtime` v0.2.1 is published on PyPI:
 
-https://pypi.org/project/loopguard-runtime/0.2.0/
+https://pypi.org/project/loopguard-runtime/0.2.1/
 
 The package builds cleanly with `python -m build`, passes `twine check`, and installs with:
 
