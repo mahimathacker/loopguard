@@ -18,6 +18,25 @@ export interface AlertMsg {
   fatal: boolean;
 }
 
+export interface DetectionSignal {
+  detector: string;
+  kind: string;
+  score: number;
+  message: string;
+  evidence: Record<string, unknown>;
+}
+
+export interface DetectionSignalMsg extends DetectionSignal {
+  type: "signal";
+}
+
+export interface GuardDecisionMsg {
+  type: "decision";
+  action: "continue" | "warn" | "replan" | "pause" | "stop";
+  risk_score: number;
+  reasons: DetectionSignal[];
+}
+
 export interface MetricsMsg {
   type: "metrics";
   total_steps: number;
@@ -38,9 +57,24 @@ export interface ErrorMsg {
   message: string;
 }
 
-export type ServerMessage = EventMsg | AlertMsg | MetricsMsg | DoneMsg | ErrorMsg;
+export type ServerMessage =
+  | EventMsg
+  | DetectionSignalMsg
+  | GuardDecisionMsg
+  | AlertMsg
+  | MetricsMsg
+  | DoneMsg
+  | ErrorMsg;
 
-export type Scenario = "exact" | "semantic" | "calc" | "trap";
+export type Scenario =
+  | "controlled_progress"
+  | "controlled_503"
+  | "controlled_401"
+  | "controlled_empty"
+  | "exact"
+  | "semantic"
+  | "calc"
+  | "trap";
 
 // Detector accuracy scorecard from the /eval endpoint. Mirrors loopguard/evals.py.
 export interface EvalScore {

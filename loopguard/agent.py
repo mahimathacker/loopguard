@@ -16,6 +16,7 @@ Graph shape (the cycle is the `tools -> agent` edge):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph, START, END
@@ -162,3 +163,41 @@ def build_real_agent():
 
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     return create_react_agent(model, [calculator, web_search], prompt=SYSTEM_PROMPT)
+
+
+CONTROLLED_SYSTEM_PROMPT = (
+    "You are operating a status-checking agent. Use the check_status tool to inspect the "
+    "job. If the job is pending or processing, check again. If you see a temporary 503 "
+    "or unavailable error, retry because it may recover. If you see a 401, 403, auth, "
+    "permission, or unauthorized error, do not blindly retry forever: explain that the "
+    "run needs reauthorization or human action. If the job completes, answer with the "
+    "completed result. If repeated checks return no useful results, try a slightly "
+    "different query once, then stop if there is still no progress."
+)
+
+
+def build_controlled_react_agent(responses: Sequence[str]):
+    """Build a real ReAct agent whose tool environment is deterministic.
+
+    The model still decides when and how to call the tool. The fake tool simply returns a
+    planned sequence, which makes live-agent loop behavior reproducible.
+    """
+    from langchain_openai import ChatOpenAI
+    from langgraph.prebuilt import create_react_agent
+
+    planned = list(responses)
+    call_count = 0
+
+    @tool
+    def check_status(query: str) -> str:
+        """Check the current status of a controlled external job or search."""
+        nonlocal call_count
+        if call_count < len(planned):
+            result = planned[call_count]
+        else:
+            result = planned[-1]
+        call_count += 1
+        return result
+
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    return create_react_agent(model, [check_status], prompt=CONTROLLED_SYSTEM_PROMPT)

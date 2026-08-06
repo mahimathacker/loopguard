@@ -16,17 +16,43 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { EvalScore, MetricsMsg, Scenario, ServerMessage } from "./types";
+import type { EvalScore, GuardDecisionMsg, MetricsMsg, Scenario, ServerMessage } from "./types";
 
 const API = process.env.NEXT_PUBLIC_LOOPGUARD_API ?? "http://localhost:8000";
 const WS = API.replace(/^http/, "ws");
 
 const SCENARIOS: { value: Scenario; label: string }[] = [
+  { value: "controlled_progress", label: "Controlled ReAct: pending -> completed" },
+  { value: "controlled_503", label: "Controlled ReAct: 503 -> success" },
+  { value: "controlled_401", label: "Controlled ReAct: auth failure" },
+  { value: "controlled_empty", label: "Controlled ReAct: no-results loop" },
   { value: "exact", label: "Scripted: identical tool loop" },
   { value: "semantic", label: "Scripted: paraphrase loop (OpenAI)" },
   { value: "calc", label: "Real agent: solvable task (finishes)" },
   { value: "trap", label: "Real agent: impossible goal (loops)" },
 ];
+
+const SCENARIO_NOTES: Record<Scenario, string> = {
+  controlled_progress: "Real model controls the run; the tool returns pending, processing, then completed. Expected: continue.",
+  controlled_503: "Real model controls retries; the tool returns two temporary failures, then success. Expected: retry/continue.",
+  controlled_401: "Real model sees repeated auth failure. Expected: stop or replan instead of burning calls.",
+  controlled_empty: "Real model receives repeated empty results. Expected: repeated/similar action plus no progress becomes stop-worthy.",
+  exact: "Same tool call and same result: high stuck risk, so the policy stops.",
+  semantic: "Different wording, same intent: semantic evidence catches what exact matching misses.",
+  calc: "A healthy live agent path: useful result appears, so LoopGuard stays quiet.",
+  trap: "A real agent keeps searching an impossible goal: repeated intent plus no progress becomes stop-worthy.",
+};
+
+const QUICKSTART = `from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
+
+handler = LoopGuardCallbackHandler()
+
+try:
+    agent.invoke(input, config={"callbacks": [handler]})
+except LoopGuardInterrupt as exc:
+    print("stopped:", exc)
+
+print(handler.report())`;
 
 // Fixed positions for the two known nodes; anything else gets staggered.
 const POSITIONS: Record<string, { x: number; y: number }> = {
@@ -35,7 +61,7 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
 };
 
 type NodeVariant = "idle" | "active" | "loop";
-type LogEntryKind = "event" | "warning" | "error" | "success";
+type LogEntryKind = "event" | "signal" | "decision" | "warning" | "error" | "success";
 
 interface LogEntry {
   id: string;
@@ -67,18 +93,29 @@ const IDLE_EDGE = { stroke: "#64748b", strokeWidth: 2 };
 const LOOP_EDGE = { stroke: "#ef4444", strokeWidth: 3 };
 
 function logTone(kind: LogEntryKind): string {
+  if (kind === "signal") return "border-cyan-500/30 bg-cyan-500/10 text-cyan-100";
+  if (kind === "decision") return "border-violet-500/30 bg-violet-500/10 text-violet-100";
   if (kind === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-200";
   if (kind === "error") return "border-red-500/35 bg-red-500/10 text-red-200";
   if (kind === "success") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
   return "border-slate-700/80 bg-slate-900/60 text-slate-200";
 }
 
+function decisionTone(action: GuardDecisionMsg["action"]): string {
+  if (action === "stop") return "border-red-400/50 bg-red-950/70 text-red-100";
+  if (action === "pause") return "border-orange-400/50 bg-orange-950/60 text-orange-100";
+  if (action === "replan") return "border-violet-400/50 bg-violet-950/60 text-violet-100";
+  if (action === "warn") return "border-amber-400/50 bg-amber-950/60 text-amber-100";
+  return "border-emerald-400/35 bg-emerald-950/40 text-emerald-100";
+}
+
 export default function Page() {
-  const [scenario, setScenario] = useState<Scenario>("exact");
+  const [scenario, setScenario] = useState<Scenario>("controlled_progress");
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsMsg | null>(null);
+  const [decision, setDecision] = useState<GuardDecisionMsg | null>(null);
   const [fatalAlert, setFatalAlert] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -171,6 +208,35 @@ export default function Page() {
         ]);
         highlightActive(msg.node);
         break;
+      case "signal":
+        setLog((prev) => [
+          ...prev,
+          {
+            id: `signal-${prev.length}`,
+            kind: "signal",
+            label: `${msg.detector} / ${msg.kind}`,
+            message: `${Math.round(msg.score * 100)}% risk evidence: ${msg.message}`,
+          },
+        ]);
+        break;
+      case "decision":
+        setDecision(msg);
+        setLog((prev) => [
+          ...prev,
+          {
+            id: `decision-${prev.length}`,
+            kind: msg.action === "stop" ? "error" : msg.action === "continue" ? "success" : "decision",
+            label: `policy: ${msg.action}`,
+            message: `risk ${Math.round(msg.risk_score * 100)}%${
+              msg.reasons.length ? ` from ${msg.reasons.map((reason) => reason.kind).join(", ")}` : ""
+            }`,
+          },
+        ]);
+        if (msg.action === "stop") {
+          setFatalAlert("PolicyEngine stopped the run: combined stuck-risk crossed the stop threshold.");
+          markLoop();
+        }
+        break;
       case "alert":
         if (msg.fatal) {
           setFatalAlert(`${msg.detector}: ${msg.message}`);
@@ -234,6 +300,7 @@ export default function Page() {
   function run() {
     setLog([]);
     setMetrics(null);
+    setDecision(null);
     setFatalAlert(null);
     setVerdict(null);
     void loadGraph();
@@ -263,8 +330,11 @@ export default function Page() {
       <header className="flex min-h-20 items-center gap-4 border-b border-slate-800/90 bg-slate-950/95 px-5 py-4 shadow-2xl shadow-black/20">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-white">LoopGuard</h1>
-          <p className="text-sm font-medium text-slate-500">agent loop observability</p>
+          <p className="text-sm font-medium text-slate-500">runtime guardrail for LangGraph agents</p>
         </div>
+        <code className="hidden rounded-md border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-300 xl:block">
+          pip install loopguard-runtime
+        </code>
         <div className="ml-auto flex min-w-0 items-center gap-3">
           <label className="sr-only" htmlFor="scenario">
             Scenario
@@ -307,22 +377,53 @@ export default function Page() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative flex-1 bg-slate-950">
-          <ReactFlow
-            className="loopguard-flow"
-            nodes={nodes}
-            edges={edges}
-            fitView
-            fitViewOptions={{ padding: 0.22 }}
-          >
-            <Background color="#334155" gap={28} size={1.2} />
-            <Controls />
-          </ReactFlow>
-          {fatalAlert && (
-            <div className="absolute left-5 right-5 top-5 rounded-lg border border-red-400/50 bg-red-950/90 px-4 py-3 text-sm font-medium text-red-100 shadow-2xl shadow-red-950/30 backdrop-blur">
-              {fatalAlert}
+        <div className="flex min-h-0 flex-1 flex-col bg-slate-950">
+          <section className="grid gap-4 border-b border-slate-800 bg-slate-900/35 p-5 lg:grid-cols-[1fr_1.2fr]">
+            <div className="min-w-0">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-sky-300">SDK usage</p>
+              <h2 className="text-lg font-semibold text-white">Attach LoopGuard to a live agent run.</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                The local graph below is still a demo runner. The production path is the callback SDK:
+                it records tool calls and results, turns them into detection signals, then lets the
+                policy decide whether to continue, warn, replan, pause, or stop.
+              </p>
+              <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs font-semibold">
+                {["trace", "signals", "policy", "report"].map((item) => (
+                  <div key={item} className="rounded-md border border-slate-800 bg-slate-950/70 px-2 py-2 text-slate-300">
+                    {item}
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
+            <pre className="min-h-0 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-[0.72rem] leading-5 text-slate-300">
+              <code>{QUICKSTART}</code>
+            </pre>
+          </section>
+
+          <div className="relative min-h-0 flex-1">
+            <ReactFlow
+              className="loopguard-flow"
+              nodes={nodes}
+              edges={edges}
+              fitView
+              fitViewOptions={{ padding: 0.22 }}
+            >
+              <Background color="#334155" gap={28} size={1.2} />
+              <Controls />
+            </ReactFlow>
+            <div className="absolute left-5 top-5 max-w-xl rounded-lg border border-slate-700/80 bg-slate-950/85 px-4 py-3 text-sm shadow-2xl shadow-black/30 backdrop-blur">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Local scenario</p>
+              <p className="mt-1 font-semibold text-slate-100">
+                {SCENARIOS.find((item) => item.value === scenario)?.label}
+              </p>
+              <p className="mt-1 text-slate-400">{SCENARIO_NOTES[scenario]}</p>
+            </div>
+            {fatalAlert && (
+              <div className="absolute left-5 right-5 top-28 rounded-lg border border-red-400/50 bg-red-950/90 px-4 py-3 text-sm font-medium text-red-100 shadow-2xl shadow-red-950/30 backdrop-blur">
+                {fatalAlert}
+              </div>
+            )}
+          </div>
         </div>
 
         <aside className="flex min-h-0 w-[27rem] flex-col border-l border-slate-800 bg-slate-950">
@@ -347,6 +448,27 @@ export default function Page() {
               </>
             ) : (
               <p className="text-sm text-slate-500">Scorecard unavailable.</p>
+            )}
+          </section>
+
+          <section className="border-b border-slate-800 p-5">
+            <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Policy decision
+            </h2>
+            {decision ? (
+              <div className={`rounded-lg border px-3 py-3 ${decisionTone(decision.action)}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold uppercase tracking-wide">{decision.action}</span>
+                  <span className="font-mono text-sm">{Math.round(decision.risk_score * 100)}%</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-current/75">
+                  {decision.reasons.length
+                    ? decision.reasons.map((reason) => reason.kind).join(" + ")
+                    : "No stuck-risk signals yet."}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Run a scenario to see policy actions.</p>
             )}
           </section>
 

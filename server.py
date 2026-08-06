@@ -36,6 +36,21 @@ app.add_middleware(
 
 # How long to pause between streamed messages, so the UI animation is watchable.
 STEP_DELAY_SECONDS = 0.5
+REACT_SCENARIOS = {
+    "controlled_progress",
+    "controlled_503",
+    "controlled_401",
+    "controlled_empty",
+    "calc",
+    "trap",
+}
+
+
+def react_topology() -> dict:
+    return {
+        "nodes": [{"id": "agent"}, {"id": "tools"}],
+        "edges": [{"source": "agent", "target": "tools"}, {"source": "tools", "target": "agent"}],
+    }
 
 
 def graph_topology(agent) -> dict:
@@ -59,6 +74,8 @@ def graph_topology(agent) -> dict:
 
 @app.get("/graph")
 def graph(scenario: str = "exact") -> dict:
+    if scenario in REACT_SCENARIOS:
+        return react_topology()
     _, agent, _, _ = get_scenario(scenario)
     return graph_topology(agent)
 

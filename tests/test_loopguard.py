@@ -455,6 +455,18 @@ class ProgressAwarePolicyTests(unittest.TestCase):
         self.assertTrue(monitor.should_interrupt)
         self.assertEqual(monitor.decisions[-1].action, GuardAction.STOP)
 
+    def test_controlled_progress_uses_looser_repeat_threshold(self):
+        try:
+            from loopguard.scenarios import controlled_detectors
+        except ModuleNotFoundError as exc:
+            self.skipTest(f"demo dependency unavailable: {exc}")
+
+        loop = next(item for item in controlled_detectors("controlled_progress") if isinstance(item, LoopDetector))
+        empty_loop = next(item for item in controlled_detectors("controlled_empty") if isinstance(item, LoopDetector))
+
+        self.assertEqual(loop.threshold, 4)
+        self.assertEqual(empty_loop.threshold, 3)
+
 
 class MetricsTests(unittest.TestCase):
     def test_metrics_count_tool_repeats(self):
