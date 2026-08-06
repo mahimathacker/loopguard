@@ -109,22 +109,28 @@ the loop comes from the situation. `SemanticLoopDetector` catches it and stops t
 Install the latest public version from GitHub:
 
 ```bash
-pip install "loopguard @ git+https://github.com/mahimathacker/loopguard.git"
+pip install "loopguard-runtime @ git+https://github.com/mahimathacker/loopguard.git"
 ```
 
 For live LangGraph/LangChain callback integration, install the LangGraph extra:
 
 ```bash
-pip install "loopguard[langgraph] @ git+https://github.com/mahimathacker/loopguard.git"
+pip install "loopguard-runtime[langgraph] @ git+https://github.com/mahimathacker/loopguard.git"
 ```
 
 For the full local demo stack:
 
 ```bash
-pip install "loopguard[demo,server] @ git+https://github.com/mahimathacker/loopguard.git"
+pip install "loopguard-runtime[demo,server] @ git+https://github.com/mahimathacker/loopguard.git"
 ```
 
 Before `develop` is merged into the default branch, add `@develop` to the URL.
+
+The package installs as `loopguard-runtime`, but the Python import remains:
+
+```python
+import loopguard
+```
 
 ## Setup
 

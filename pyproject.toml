@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "loopguard"
+name = "loopguard-runtime"
 version = "0.2.0"
 description = "Progress-aware runtime guardrails for LangGraph and LangChain agents."
 readme = "README.md"
