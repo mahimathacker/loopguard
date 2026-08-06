@@ -106,23 +106,25 @@ the loop comes from the situation. `SemanticLoopDetector` catches it and stops t
 
 ## Install
 
-The latest progress-aware version currently lives on the `develop` branch:
+Install the latest public version from GitHub:
 
 ```bash
-pip install "loopguard @ git+https://github.com/mahimathacker/loopguard.git@develop"
+pip install "loopguard @ git+https://github.com/mahimathacker/loopguard.git"
 ```
 
 For live LangGraph/LangChain callback integration, install the LangGraph extra:
 
 ```bash
-pip install "loopguard[langgraph] @ git+https://github.com/mahimathacker/loopguard.git@develop"
+pip install "loopguard[langgraph] @ git+https://github.com/mahimathacker/loopguard.git"
 ```
 
 For the full local demo stack:
 
 ```bash
-pip install "loopguard[demo,server] @ git+https://github.com/mahimathacker/loopguard.git@develop"
+pip install "loopguard[demo,server] @ git+https://github.com/mahimathacker/loopguard.git"
 ```
+
+Before `develop` is merged into the default branch, add `@develop` to the URL.
 
 ## Setup
 
