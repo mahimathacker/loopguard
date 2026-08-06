@@ -91,7 +91,7 @@ class Monitor:
         fatal = decision.action == GuardAction.STOP
         alerts: list[Alert] = []
         seen: set[tuple[str, str, bool]] = set()
-        for signal in decision.reasons:
+        for signal in signals:
             key = (signal.detector, signal.kind, fatal)
             if key in seen:
                 continue

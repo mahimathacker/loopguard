@@ -338,7 +338,11 @@ class CallbackHandlerTests(unittest.TestCase):
         with self.assertRaises(LoopGuardInterrupt) as caught:
             handler.on_tool_end("no results")
 
-        self.assertEqual(caught.exception.alert.detector, "LoopDetector")
+        self.assertEqual(caught.exception.alert.detector, "ProgressDetector")
+        self.assertIn(
+            "LoopDetector",
+            [signal.detector for signal in caught.exception.decision.reasons],
+        )
         self.assertTrue(handler.should_interrupt)
 
     def test_callback_handler_can_collect_alerts_without_raising(self):
