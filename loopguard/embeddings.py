@@ -4,8 +4,8 @@ Detector A needs to ask "are these two agent decisions *similar*?" even when the
 not byte-identical. The standard way: turn each text into a vector (an "embedding") via
 an embedding model, then measure the angle between vectors (cosine similarity).
 
-We use OpenAI's embedding API for the vectors. The Embedder interface means you can swap
-in a different backend (local sentence-transformers, etc.) without touching the detector.
+The Embedder interface means you can swap backends (OpenAI, Gemini, local
+sentence-transformers, etc.) without touching the detector.
 """
 
 from __future__ import annotations
@@ -52,6 +52,48 @@ class OpenAIEmbedder:
             resp = self.client.embeddings.create(model=self.model, input=text)
             self._cache[text] = resp.data[0].embedding
         return self._cache[text]
+
+
+class GeminiEmbedder:
+    """Embeds text with Google's Gemini embedding API via LangChain."""
+
+    def __init__(self, model: str = "gemini-embedding-2-preview") -> None:
+        self.model = model
+        self._client = None
+        self._cache: dict[str, list[float]] = {}
+
+    @property
+    def client(self):
+        if self._client is None:
+            if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
+                raise RuntimeError(
+                    "GOOGLE_API_KEY or GEMINI_API_KEY is not set. Add one to your "
+                    "environment or a .env file to use Gemini semantic detection."
+                )
+            from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+            self._client = GoogleGenerativeAIEmbeddings(
+                model=self.model,
+                task_type="SEMANTIC_SIMILARITY",
+            )
+        return self._client
+
+    def encode(self, text: str) -> list[float]:
+        if text not in self._cache:
+            self._cache[text] = self.client.embed_query(text)
+        return self._cache[text]
+
+
+def default_embedder() -> Embedder:
+    """Choose the embedding provider from environment configuration."""
+    provider = os.getenv("LOOPGUARD_EMBEDDING_PROVIDER", "openai").strip().lower()
+    if provider == "gemini":
+        return GeminiEmbedder()
+    if provider == "openai":
+        return OpenAIEmbedder()
+    raise RuntimeError(
+        "Unsupported LOOPGUARD_EMBEDDING_PROVIDER. Use 'openai' or 'gemini'."
+    )
 
 
 def cosine(a: list[float], b: list[float]) -> float:

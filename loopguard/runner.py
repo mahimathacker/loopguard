@@ -31,6 +31,32 @@ from .monitor import Monitor
 from .signals import GuardDecision
 
 
+def _message_text(content) -> str:
+    """Normalize provider-specific message content into display text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if text:
+                    parts.append(str(text))
+            elif item is not None:
+                parts.append(str(item))
+        return " ".join(parts)
+    if isinstance(content, dict):
+        if content.get("text"):
+            return str(content["text"])
+        if content.get("content"):
+            return _message_text(content["content"])
+    return str(content)
+
+
+def _clean_content(content, limit: int) -> str:
+    return _message_text(content).strip().replace("\n", " ")[:limit]
+
+
 def tool_signature(tool: str, args: dict) -> str:
     """Normalize a tool call into a canonical key ('similar args' = normalized-equal)."""
     norm = ", ".join(f"{k}={str(v).strip().lower()}" for k, v in sorted(args.items()))
@@ -73,17 +99,19 @@ def _interpret_messages(messages: list) -> tuple[str, str, dict] | None:
             "last_args": args,
         }
     if getattr(msg, "type", None) == "tool":  # a tool returned a result
-        content = str(getattr(msg, "content", "")).strip().replace("\n", " ")[:160]
+        content = _clean_content(getattr(msg, "content", ""), 160)
         return f"observed: {content}", f"result:{content}", {"last_result": content}
 
     # otherwise it is the model's final answer (no tool calls) -> the run is finishing
-    content = str(getattr(msg, "content", "")).strip().replace("\n", " ")[:200]
+    content = _clean_content(getattr(msg, "content", ""), 200)
     return f"answered: {content}", f"final:{content}", {"final": content}
 
 
 def _decision_message(decision: GuardDecision) -> dict:
     payload = asdict(decision)
     payload["action"] = decision.action.value
+    payload["recommended_action"] = decision.recommended_action_label
+    payload["stop_reason"] = decision.stop_reason if decision.action.value == "stop" else None
     return {"type": "decision", **payload}
     
 
@@ -96,6 +124,7 @@ def stream_run(
     monitor = Monitor(detectors=detectors)
     initial = initial or {"goal": "find the weather", "steps": 0}
     interrupted = False
+    stop_reason: str | None = None
 
     try:
         for chunk in agent.stream(
@@ -117,6 +146,7 @@ def stream_run(
 
             if monitor.should_interrupt:
                 interrupted = True
+                stop_reason = monitor.decisions[-1].stop_reason
                 break
     except GraphRecursionError:
         yield {"type": "error", "message": "LangGraph recursion_limit tripped before a detector fired."}
@@ -124,4 +154,4 @@ def stream_run(
         yield {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
 
     yield {"type": "metrics", **asdict(Metrics.from_events(monitor.tracer.events))}
-    yield {"type": "done", "interrupted": interrupted}
+    yield {"type": "done", "interrupted": interrupted, "reason": stop_reason}

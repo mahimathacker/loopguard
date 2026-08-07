@@ -16,7 +16,14 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { EvalScore, GuardDecisionMsg, MetricsMsg, Scenario, ServerMessage } from "./types";
+import type {
+  EvalScore,
+  GuardDecisionMsg,
+  MetricsMsg,
+  RuntimeInfo,
+  Scenario,
+  ServerMessage,
+} from "./types";
 
 const API = process.env.NEXT_PUBLIC_LOOPGUARD_API ?? "http://localhost:8000";
 const WS = API.replace(/^http/, "ws");
@@ -27,7 +34,7 @@ const SCENARIOS: { value: Scenario; label: string }[] = [
   { value: "controlled_401", label: "Controlled ReAct: auth failure" },
   { value: "controlled_empty", label: "Controlled ReAct: no-results loop" },
   { value: "exact", label: "Scripted: identical tool loop" },
-  { value: "semantic", label: "Scripted: paraphrase loop (OpenAI)" },
+  { value: "semantic", label: "Scripted: paraphrase loop (embeddings)" },
   { value: "calc", label: "Real agent: solvable task (finishes)" },
   { value: "trap", label: "Real agent: impossible goal (loops)" },
 ];
@@ -120,6 +127,7 @@ export default function Page() {
   const [verdict, setVerdict] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [evalScore, setEvalScore] = useState<EvalScore | null>(null);
+  const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -172,6 +180,10 @@ export default function Page() {
       .then((res) => res.json() as Promise<EvalScore>)
       .then(setEvalScore)
       .catch(() => setEvalScore(null));
+    fetch(`${API}/runtime`)
+      .then((res) => res.json() as Promise<RuntimeInfo>)
+      .then(setRuntime)
+      .catch(() => setRuntime(null));
   }, []);
 
   function highlightActive(active: string) {
@@ -226,20 +238,20 @@ export default function Page() {
           {
             id: `decision-${prev.length}`,
             kind: msg.action === "stop" ? "error" : msg.action === "continue" ? "success" : "decision",
-            label: `policy: ${msg.action}`,
+            label: msg.recommended_action,
             message: `risk ${Math.round(msg.risk_score * 100)}%${
               msg.reasons.length ? ` from ${msg.reasons.map((reason) => reason.kind).join(", ")}` : ""
             }`,
           },
         ]);
         if (msg.action === "stop") {
-          setFatalAlert("PolicyEngine stopped the run: combined stuck-risk crossed the stop threshold.");
+          setFatalAlert(msg.stop_reason ?? "Run stopped: LoopGuard policy reached the stop threshold.");
           markLoop();
         }
         break;
       case "alert":
         if (msg.fatal) {
-          setFatalAlert(`${msg.detector}: ${msg.message}`);
+          setFatalAlert((current) => current ?? `${msg.detector}: ${msg.message}`);
           setLog((prev) => [
             ...prev,
             {
@@ -280,7 +292,7 @@ export default function Page() {
       case "done":
         {
           const message = msg.interrupted
-            ? "LoopGuard interrupted the agent: loop detected."
+            ? msg.reason ?? "Run stopped: LoopGuard policy reached the stop threshold."
             : "Run finished without a fatal loop alert.";
           setVerdict(message);
           setLog((prev) => [
@@ -332,6 +344,14 @@ export default function Page() {
           <h1 className="text-xl font-bold text-white">LoopGuard</h1>
           <p className="text-sm font-medium text-slate-500">runtime guardrail for LangGraph agents</p>
         </div>
+        {runtime && (
+          <div className="hidden min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300 lg:block">
+            <span className="font-bold uppercase tracking-wide text-slate-500">model</span>{" "}
+            <span className="font-mono text-sky-300">{runtime.model_provider}</span>
+            <span className="mx-2 text-slate-700">/</span>
+            <span className="font-mono">{runtime.model}</span>
+          </div>
+        )}
         <code className="hidden rounded-md border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-300 xl:block">
           pip install loopguard-runtime
         </code>
@@ -429,7 +449,7 @@ export default function Page() {
         <aside className="flex min-h-0 w-[27rem] flex-col border-l border-slate-800 bg-slate-950">
           <section className="border-b border-slate-800 p-5">
             <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Detector accuracy
+              Offline detector eval
             </h2>
             {evalScore ? (
               <>
@@ -445,6 +465,9 @@ export default function Page() {
                   {evalScore.detector} · {evalScore.cases} cases · tp={evalScore.tp} fp={evalScore.fp}{" "}
                   fn={evalScore.fn} tn={evalScore.tn}
                 </p>
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Static replay scorecard, not the current live scenario.
+                </p>
               </>
             ) : (
               <p className="text-sm text-slate-500">Scorecard unavailable.</p>
@@ -453,7 +476,7 @@ export default function Page() {
 
           <section className="border-b border-slate-800 p-5">
             <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Policy decision
+              Recommended action
             </h2>
             {decision ? (
               <div className={`rounded-lg border px-3 py-3 ${decisionTone(decision.action)}`}>
@@ -461,6 +484,11 @@ export default function Page() {
                   <span className="text-sm font-bold uppercase tracking-wide">{decision.action}</span>
                   <span className="font-mono text-sm">{Math.round(decision.risk_score * 100)}%</span>
                 </div>
+                {decision.stop_reason && (
+                  <p className="mt-2 text-xs font-semibold leading-5 text-current/90">
+                    {decision.stop_reason}
+                  </p>
+                )}
                 <p className="mt-2 text-xs leading-5 text-current/75">
                   {decision.reasons.length
                     ? decision.reasons.map((reason) => reason.kind).join(" + ")

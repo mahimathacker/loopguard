@@ -13,7 +13,7 @@ class EvalCase:
 
     name: str                            # human label, e.g. "repeats the same search 3x"
     decisions: list[tuple[str, dict]]    # the agent's tool calls in order: (tool_name, args)
-    is_loop: bool                        # ground truth: should a correct detector interrupt?
+    is_loop: bool                        # ground truth: should a correct detector flag it?
 
 
 @dataclass
@@ -26,7 +26,7 @@ class JudgeCase:
 
 
 def replay(case: EvalCase, detectors: list[Detector]) -> bool:
-    """Run one case through the detectors; return True if they would interrupt the run."""
+    """Run one case through the detectors; return True if they flag stuck evidence."""
     for detector in detectors:
         detector.reset()  # clear any per-run state so cases never leak into each other
 
@@ -34,9 +34,9 @@ def replay(case: EvalCase, detectors: list[Detector]) -> bool:
     for tool, args in case.decisions:
         signature = tool_signature(tool, args)
         monitor.observe("agent", f"decided: {tool}({args})", signature, last_tool=tool, last_args=args)
-        if monitor.should_interrupt:
-            return True  # a fatal alert fired -> detector predicts "loop"
-    return False  # got through every decision with no fatal alert -> predicts "healthy"
+        if monitor.signals:
+            return True  # detector evidence fired -> detector predicts "loop"
+    return False  # got through every decision with no detector evidence -> predicts "healthy"
 
 
 @dataclass

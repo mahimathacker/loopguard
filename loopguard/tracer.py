@@ -13,13 +13,7 @@ stream - and it's also the exact payload a React Flow UI would consume later.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from itertools import count
 from typing import Any
-
-
-# A monotonic counter for ordering. Deterministic and easy to reason about.
-# Swap/augment with time.time() when you want real latency metrics.
-_seq = count()
 
 
 @dataclass
@@ -41,16 +35,18 @@ class Tracer:
 
     def __init__(self) -> None:
         self.events: list[Event] = []
+        self._step = 0
 
     def record(self, node: str, action: str, signature: str, **payload: Any) -> Event:
         event = Event(
-            step=next(_seq),
+            step=self._step,
             node=node,
             action=action,
             signature=signature,
             payload=payload,
         )
         self.events.append(event)
+        self._step += 1
         return event
 
     def timeline(self) -> str:

@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from .embeddings import Embedder, OpenAIEmbedder, cosine
+from .embeddings import Embedder, cosine, default_embedder
 from .signals import DetectionSignal
 from .tracer import Event
 
@@ -320,11 +320,16 @@ class RepeatedFailureDetector(Detector):
             return None
 
         kind, score = failure
+        label = (
+            "Non-retryable tool failure detected"
+            if kind == "permanent_failure"
+            else "Repeated tool failure detected"
+        )
         return DetectionSignal(
             detector=self.name,
             kind=kind,
             score=score,
-            message=f"Repeated tool failure detected: {event.signature.removeprefix('result:')}",
+            message=f"{label}: {event.signature.removeprefix('result:')}",
             evidence={
                 "attempts": len(results),
                 "threshold": self.attempts,
@@ -388,7 +393,7 @@ class SemanticLoopDetector(Detector):
         min_repeats: int = 3,
         fatal: bool = True,
     ) -> None:
-        self.embedder = embedder or OpenAIEmbedder()
+        self.embedder = embedder or default_embedder()
         self.threshold = threshold
         self.window = window
         self.min_repeats = min_repeats

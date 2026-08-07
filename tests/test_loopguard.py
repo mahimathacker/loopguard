@@ -18,11 +18,13 @@ from loopguard.detectors import (
     ToolCallBudgetDetector,
 )
 from loopguard.embeddings import cosine
+from loopguard.evals import evaluate, loop_dataset
 from loopguard.ingest import analyze_file, analyze_trace, human_summary, json_report
 from loopguard.langgraph import LoopGuardCallbackHandler, LoopGuardInterrupt
 from loopguard.metrics import Metrics
 from loopguard.monitor import Monitor
 from loopguard.policy import PolicyEngine
+from loopguard.runner import _interpret_messages
 from loopguard.signals import DetectionSignal, GuardAction
 from loopguard.tracer import Event
 
@@ -126,6 +128,16 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(monitor.alerts[-1].detector, "ToolCallBudgetDetector")
         self.assertEqual(monitor.alerts[-1].kind, "tool_call_budget")
 
+    def test_tracer_steps_reset_per_monitor_run(self):
+        first = Monitor([LoopDetector()])
+        second = Monitor([LoopDetector()])
+
+        first.observe("agent", "step", "event:first")
+        second.observe("agent", "step", "event:second")
+
+        self.assertEqual(first.tracer.events[0].step, 0)
+        self.assertEqual(second.tracer.events[0].step, 0)
+
     def test_handoff_loop_detector_interrupts_on_repeated_cycle(self):
         monitor = Monitor([HandoffLoopDetector(repeats=2, window=8)])
 
@@ -179,8 +191,43 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(monitor.alerts[-1].detector, "SemanticLoopDetector")
         self.assertEqual(monitor.alerts[-1].kind, "semantic_loop")
 
+    def test_permanent_failure_message_is_not_repeated_when_first_attempt_stops(self):
+        monitor = Monitor([RepeatedFailureDetector(attempts=1)])
+
+        monitor.observe("tools", "error: 401 unauthorized", "result:401 unauthorized")
+
+        self.assertTrue(monitor.should_interrupt)
+        self.assertEqual(
+            monitor.signals[-1].message,
+            "Non-retryable tool failure detected: 401 unauthorized",
+        )
+        self.assertEqual(
+            monitor.decisions[-1].stop_reason,
+            "Run stopped: non-retryable authentication failure.",
+        )
+
 
 class RunnerWrapperTests(unittest.TestCase):
+    def test_runner_normalizes_structured_final_message_content(self):
+        class Message:
+            type = "ai"
+            tool_calls = None
+            content = [
+                {
+                    "type": "text",
+                    "text": "The job `loopguard-demo-42` has completed.",
+                    "extras": {"signature": "opaque-provider-metadata"},
+                }
+            ]
+
+        interpreted = _interpret_messages([Message()])
+
+        self.assertIsNotNone(interpreted)
+        action, signature, payload = interpreted
+        self.assertEqual(action, "answered: The job `loopguard-demo-42` has completed.")
+        self.assertEqual(signature, "final:The job `loopguard-demo-42` has completed.")
+        self.assertEqual(payload, {"final": "The job `loopguard-demo-42` has completed."})
+
     def test_loopguard_stream_wraps_live_agent_and_interrupts(self):
         chunks = []
         for _ in range(3):
@@ -192,7 +239,14 @@ class RunnerWrapperTests(unittest.TestCase):
 
         self.assertEqual(agent.config_seen, {"recursion_limit": 17})
         self.assertIn("alert", [msg["type"] for msg in messages])
-        self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
+        self.assertEqual(
+            messages[-1],
+            {
+                "type": "done",
+                "interrupted": True,
+                "reason": "Run stopped: repeated actions produced no progress.",
+            },
+        )
         alert = next(msg for msg in messages if msg["type"] == "alert")
         self.assertEqual(alert["detector"], "LoopDetector")
 
@@ -210,10 +264,10 @@ class RunnerWrapperTests(unittest.TestCase):
 
         self.assertIn("signal", [msg["type"] for msg in messages])
         self.assertIn("decision", [msg["type"] for msg in messages])
-        self.assertEqual(
-            [msg for msg in messages if msg["type"] == "decision"][-1]["action"],
-            "stop",
-        )
+        decision = [msg for msg in messages if msg["type"] == "decision"][-1]
+        self.assertEqual(decision["action"], "stop")
+        self.assertEqual(decision["recommended_action"], "Recommended action: STOP")
+        self.assertEqual(decision["stop_reason"], "Run stopped: repeated actions produced no progress.")
 
     def test_loopguard_stream_interrupts_on_live_step_budget(self):
         chunks = [
@@ -227,7 +281,10 @@ class RunnerWrapperTests(unittest.TestCase):
         alert = next(msg for msg in messages if msg["type"] == "alert")
         self.assertEqual(alert["detector"], "StepBudgetDetector")
         self.assertEqual(alert["kind"], "step_budget")
-        self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
+        self.assertEqual(
+            messages[-1],
+            {"type": "done", "interrupted": True, "reason": "Run stopped: step budget exceeded."},
+        )
 
     def test_loopguard_stream_interrupts_on_live_tool_call_budget(self):
         chunks = [
@@ -241,7 +298,10 @@ class RunnerWrapperTests(unittest.TestCase):
         alert = next(msg for msg in messages if msg["type"] == "alert")
         self.assertEqual(alert["detector"], "ToolCallBudgetDetector")
         self.assertEqual(alert["kind"], "tool_call_budget")
-        self.assertEqual(messages[-1], {"type": "done", "interrupted": True})
+        self.assertEqual(
+            messages[-1],
+            {"type": "done", "interrupted": True, "reason": "Run stopped: tool-call budget exceeded."},
+        )
 
     def test_loopguard_from_config_uses_live_budgets(self):
         config = "\n".join(
@@ -463,9 +523,15 @@ class ProgressAwarePolicyTests(unittest.TestCase):
 
         loop = next(item for item in controlled_detectors("controlled_progress") if isinstance(item, LoopDetector))
         empty_loop = next(item for item in controlled_detectors("controlled_empty") if isinstance(item, LoopDetector))
+        auth_failure = next(
+            item
+            for item in controlled_detectors("controlled_401")
+            if isinstance(item, RepeatedFailureDetector)
+        )
 
         self.assertEqual(loop.threshold, 4)
         self.assertEqual(empty_loop.threshold, 3)
+        self.assertEqual(auth_failure.attempts, 1)
 
 
 class MetricsTests(unittest.TestCase):
@@ -485,6 +551,18 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(metrics.distinct_tool_calls, 2)
         self.assertEqual(metrics.most_common_action, ("tool:search(query=pricing page)", 2))
         self.assertAlmostEqual(metrics.repeat_rate, 1 / 3)
+
+
+class EvalTests(unittest.TestCase):
+    def test_loop_detector_eval_scores_signals_not_only_stops(self):
+        card = evaluate(loop_dataset(), [LoopDetector(threshold=3)])
+
+        self.assertEqual(card.tp, 2)
+        self.assertEqual(card.fp, 0)
+        self.assertEqual(card.fn, 1)
+        self.assertEqual(card.tn, 3)
+        self.assertEqual(card.precision, 1.0)
+        self.assertAlmostEqual(card.recall, 2 / 3)
 
 
 class IngestTests(unittest.TestCase):

@@ -35,6 +35,8 @@ export interface GuardDecisionMsg {
   action: "continue" | "warn" | "replan" | "pause" | "stop";
   risk_score: number;
   reasons: DetectionSignal[];
+  recommended_action: string;
+  stop_reason: string | null;
 }
 
 export interface MetricsMsg {
@@ -50,6 +52,7 @@ export interface MetricsMsg {
 export interface DoneMsg {
   type: "done";
   interrupted: boolean;
+  reason: string | null;
 }
 
 export interface ErrorMsg {
@@ -87,4 +90,10 @@ export interface EvalScore {
   precision: number;
   recall: number;
   f1: number;
+}
+
+export interface RuntimeInfo {
+  model_provider: string;
+  model: string;
+  embedding_provider: string;
 }

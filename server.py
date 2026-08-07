@@ -1,10 +1,11 @@
-"""LoopGuard streaming server (Phase 2).
+"""LoopGuard streaming server.
 
-Exposes the same runs as the CLI, but over HTTP/WebSocket so a browser (the Phase 3
-React Flow UI) can consume the trace live:
+Exposes the same runs as the CLI, but over HTTP/WebSocket so the React Flow UI can
+consume the trace live:
 
-    GET  /graph?scenario=exact|semantic   -> the static graph topology (nodes + edges)
-    WS   /run?scenario=exact|semantic     -> live stream of event/alert/metrics/done messages
+    GET  /graph?scenario=...    -> static graph topology (nodes + edges)
+    GET  /runtime               -> selected model and embedding providers
+    WS   /run?scenario=...      -> live event/signal/decision/alert stream
 
 Run:  uvicorn server:app --reload
 """
@@ -12,6 +13,7 @@ Run:  uvicorn server:app --reload
 from __future__ import annotations
 
 import asyncio
+import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -95,14 +97,29 @@ def eval_detectors() -> dict:
     }
 
 
+@app.get("/runtime")
+def runtime() -> dict:
+    """Return non-secret runtime provider settings for the UI."""
+    provider = os.getenv("LOOPGUARD_MODEL_PROVIDER", "openai").strip().lower()
+    if provider == "gemini":
+        model = os.getenv("LOOPGUARD_GEMINI_MODEL", "gemini-3.6-flash")
+    else:
+        model = os.getenv("LOOPGUARD_OPENAI_MODEL", "gpt-4o-mini")
+    return {
+        "model_provider": provider,
+        "model": model,
+        "embedding_provider": os.getenv("LOOPGUARD_EMBEDDING_PROVIDER", "openai"),
+    }
+
+
 @app.websocket("/run")
 async def run(websocket: WebSocket) -> None:
     await websocket.accept()
     scenario = websocket.query_params.get("scenario", "exact")
-    _, agent, detectors, initial = get_scenario(scenario)
     recursion_limit = 30 if scenario in {"calc", "trap"} else 50
 
     try:
+        _, agent, detectors, initial = get_scenario(scenario)
         for message in stream_run(agent, detectors, initial, recursion_limit):
             await websocket.send_json(message)
             await asyncio.sleep(STEP_DELAY_SECONDS)

@@ -21,14 +21,50 @@ from loopguard.scenarios import get_scenario
 load_dotenv()  # picks up OPENAI_API_KEY from a .env file if present
 
 
-NEEDS_KEY = {"semantic", "calc", "trap"}
+NEEDS_KEY = {
+    "semantic",
+    "calc",
+    "trap",
+    "controlled_progress",
+    "controlled_503",
+    "controlled_401",
+    "controlled_empty",
+}
+
+
+def _has_openai_key() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY"))
+
+
+def _has_google_key() -> bool:
+    return bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
+
+
+def _missing_key_message(name: str) -> str | None:
+    model_provider = os.getenv("LOOPGUARD_MODEL_PROVIDER", "openai").strip().lower()
+    embedding_provider = os.getenv("LOOPGUARD_EMBEDDING_PROVIDER", model_provider).strip().lower()
+
+    if name == "semantic":
+        if embedding_provider == "gemini" and not _has_google_key():
+            return "Set GOOGLE_API_KEY or GEMINI_API_KEY to run the 'semantic' scenario with Gemini embeddings."
+        if embedding_provider == "openai" and not _has_openai_key():
+            return "Set OPENAI_API_KEY to run the 'semantic' scenario with OpenAI embeddings."
+        return None
+
+    if name in NEEDS_KEY:
+        if model_provider == "gemini" and not _has_google_key():
+            return f"Set GOOGLE_API_KEY or GEMINI_API_KEY to run the '{name}' scenario with Gemini."
+        if model_provider == "openai" and not _has_openai_key():
+            return f"Set OPENAI_API_KEY to run the '{name}' scenario with OpenAI."
+    return None
 
 
 def main() -> None:
     name = sys.argv[1] if len(sys.argv) > 1 else "exact"
 
-    if name in NEEDS_KEY and not os.getenv("OPENAI_API_KEY"):
-        print(f"Set OPENAI_API_KEY (e.g. in a .env file) to run the '{name}' scenario.")
+    missing_key = _missing_key_message(name)
+    if missing_key:
+        print(missing_key)
         return
 
     title, agent, detectors, initial = get_scenario(name)
@@ -49,8 +85,7 @@ def main() -> None:
             print(Metrics(**{k: v for k, v in msg.items() if k != "type"}).report())
         elif kind == "done":
             print("\n-- Verdict --")
-            print("LoopGuard interrupted the agent: loop detected." if msg["interrupted"]
-                  else "Run finished without a fatal loop alert.")
+            print(msg.get("reason") if msg["interrupted"] else "Run finished without a fatal loop alert.")
 
 
 if __name__ == "__main__":

@@ -32,7 +32,9 @@ class LoopGuardInterrupt(RuntimeError):
     def __init__(self, alert: Alert | None = None, decision: GuardDecision | None = None) -> None:
         self.alert = alert
         self.decision = decision
-        if alert is not None:
+        if decision is not None and decision.action == GuardAction.STOP:
+            message = decision.stop_reason
+        elif alert is not None:
             message = alert.message
         elif decision is not None and decision.reasons:
             message = decision.reasons[-1].message
@@ -146,6 +148,8 @@ class LoopGuardCallbackHandler(BaseCallbackHandler):
         for decision in self.monitor.decisions:
             payload = asdict(decision)
             payload["action"] = decision.action.value
+            payload["recommended_action"] = decision.recommended_action_label
+            payload["stop_reason"] = decision.stop_reason if decision.action == GuardAction.STOP else None
             out.append(payload)
         return out
 
@@ -167,6 +171,12 @@ class LoopGuardCallbackHandler(BaseCallbackHandler):
             self.messages.append({"type": "signal", **asdict(signal)})
         decision_payload = asdict(result.decision)
         decision_payload["action"] = result.decision.action.value
+        decision_payload["recommended_action"] = result.decision.recommended_action_label
+        decision_payload["stop_reason"] = (
+            result.decision.stop_reason
+            if result.decision.action == GuardAction.STOP
+            else None
+        )
         self.messages.append({"type": "decision", **decision_payload})
         for alert in result.alerts:
             self.messages.append({"type": "alert", **asdict(alert)})

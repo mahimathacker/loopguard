@@ -72,6 +72,9 @@ The report includes:
 - `metrics`: step counts, tool calls, repeat rate, and common actions
 - `alerts`: legacy compatibility alerts
 
+`REPLAN` and `PAUSE` are recommendations today. LoopGuard records them in the report;
+automatic interruption happens only when the policy reaches `STOP`.
+
 To observe without stopping the run:
 
 ```python
@@ -193,18 +196,27 @@ handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
 agent.invoke(my_input, config={"callbacks": [handler]})
 ```
 
-Set `semantic: true` to enable paraphrase-loop detection with embeddings. That path uses
-OpenAI embeddings and requires `OPENAI_API_KEY`.
+Set `semantic: true` to enable paraphrase-loop detection with embeddings. That path can
+use OpenAI or Gemini embeddings:
+
+```bash
+LOOPGUARD_EMBEDDING_PROVIDER=openai  # requires OPENAI_API_KEY
+LOOPGUARD_EMBEDDING_PROVIDER=gemini  # requires GOOGLE_API_KEY or GEMINI_API_KEY
+```
 
 ## Local Demos
 
-The repo includes a FastAPI/WebSocket backend, a Next.js + React Flow UI, and four demo
+The repo includes a FastAPI/WebSocket backend, a Next.js + React Flow UI, and local demo
 scenarios:
 
 - `exact`: scripted identical tool loop, offline
 - `semantic`: scripted paraphrase loop, requires embeddings
-- `calc`: real `gpt-4o-mini` agent that finishes
-- `trap`: real `gpt-4o-mini` agent given an impossible goal
+- `controlled_progress`: real ReAct agent, controlled pending -> processing -> completed tool responses
+- `controlled_503`: real ReAct agent, controlled 503 -> 503 -> success tool responses
+- `controlled_401`: real ReAct agent, controlled repeated auth failure
+- `controlled_empty`: real ReAct agent, controlled no-results loop
+- `calc`: real ReAct agent that finishes
+- `trap`: real ReAct agent given an impossible goal
 
 Screenshots:
 
@@ -224,7 +236,22 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set `OPENAI_API_KEY` in `.env` for semantic and real-agent scenarios.
+Set one model provider in `.env` for real-agent scenarios:
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-...
+LOOPGUARD_MODEL_PROVIDER=openai
+LOOPGUARD_EMBEDDING_PROVIDER=openai
+
+# Gemini
+GOOGLE_API_KEY=...
+LOOPGUARD_MODEL_PROVIDER=gemini
+LOOPGUARD_GEMINI_MODEL=gemini-3.6-flash
+LOOPGUARD_EMBEDDING_PROVIDER=gemini
+```
+
+For a lower-cost Gemini demo model, try `gemini-3.5-flash-lite`.
 
 Terminal 1:
 
@@ -304,7 +331,7 @@ agent-loop/
     monitor.py        records events, collects signals, and stores decisions
     guard.py          public LoopGuard wrapper for live runs
     langgraph.py      callback handler for LangGraph/LangChain live runs
-    embeddings.py     OpenAI embeddings for semantic detection
+    embeddings.py     OpenAI/Gemini embeddings for semantic detection
     runner.py         stream_run helper
     ingest.py         offline trace analyzer
     check.py          saved-trace check command

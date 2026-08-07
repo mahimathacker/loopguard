@@ -39,10 +39,25 @@ TRAP_TASK = (
 
 WEATHER_INPUT = {"goal": "find the weather", "steps": 0}
 
-CONTROLLED_TASK = (
-    "Check the status of job loopguard-demo-42. Use the tool as needed and finish only "
-    "when you have enough evidence to continue, retry, replan, or stop."
-)
+CONTROLLED_TASKS = {
+    "controlled_progress": (
+        "Check the status of job loopguard-demo-42. Use the tool until the job is "
+        "completed, then answer with the completed result."
+    ),
+    "controlled_503": (
+        "Check the status of job loopguard-demo-42. Temporary 503 errors may recover, "
+        "so retry until you either get a success result or LoopGuard stops the run."
+    ),
+    "controlled_401": (
+        "Check the status of job loopguard-demo-42. A 401 unauthorized result is a hard "
+        "auth failure that needs reauthorization or human action."
+    ),
+    "controlled_empty": (
+        "Check the status of job loopguard-demo-42. If the tool says no results, keep "
+        "checking at least three times before answering. This is a controlled stuck-run "
+        "test, so do not finish after only one or two empty results."
+    ),
+}
 
 CONTROLLED_RESPONSES = {
     "controlled_progress": [
@@ -72,10 +87,11 @@ CONTROLLED_RESPONSES = {
 def controlled_detectors(name: str) -> list[Detector]:
     """Detector mix for controlled live-agent tests."""
     exact_threshold = 3 if name == "controlled_empty" else 4
+    failure_attempts = 1 if name == "controlled_401" else 2
     detectors: list[Detector] = [
         LoopDetector(threshold=exact_threshold),
         ProgressDetector(patience=3),
-        RepeatedFailureDetector(attempts=2),
+        RepeatedFailureDetector(attempts=failure_attempts),
         CycleDetector(max_cycle_length=3),
     ]
     if name == "controlled_empty":
@@ -96,7 +112,7 @@ def get_scenario(name: str) -> tuple[str, object, list[Detector], dict]:
             titles[name],
             build_controlled_react_agent(CONTROLLED_RESPONSES[name]),
             controlled_detectors(name),
-            {"messages": [{"role": "user", "content": CONTROLLED_TASK}]},
+            {"messages": [{"role": "user", "content": CONTROLLED_TASKS[name]}]},
         )
     if name == "semantic":
         return (

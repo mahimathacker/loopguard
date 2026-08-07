@@ -100,6 +100,7 @@ def build_paraphrasing_agent():
 
 import ast
 import operator
+import os
 
 from langchain_core.tools import tool
 
@@ -156,13 +157,37 @@ SYSTEM_PROMPT = (
 )
 
 
+def _chat_model():
+    """Create the demo chat model from environment configuration."""
+    provider = os.getenv("LOOPGUARD_MODEL_PROVIDER", "openai").strip().lower()
+    if provider == "gemini":
+        if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
+            raise RuntimeError(
+                "GOOGLE_API_KEY or GEMINI_API_KEY is not set. Add one to your "
+                "environment or .env file to use Gemini demo agents."
+            )
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        model_name = os.getenv("LOOPGUARD_GEMINI_MODEL", "gemini-3.6-flash")
+        return ChatGoogleGenerativeAI(model=model_name, temperature=0)
+    if provider == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. Add it to your environment or .env file "
+                "to use OpenAI demo agents."
+            )
+        from langchain_openai import ChatOpenAI
+
+        model_name = os.getenv("LOOPGUARD_OPENAI_MODEL", "gpt-4o-mini")
+        return ChatOpenAI(model=model_name, temperature=0)
+    raise RuntimeError("Unsupported LOOPGUARD_MODEL_PROVIDER. Use 'openai' or 'gemini'.")
+
+
 def build_real_agent():
-    """A real ReAct agent: gpt-4o-mini + calculator + web_search. Requires OPENAI_API_KEY."""
-    from langchain_openai import ChatOpenAI
+    """A real ReAct agent with calculator + web_search."""
     from langgraph.prebuilt import create_react_agent
 
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    return create_react_agent(model, [calculator, web_search], prompt=SYSTEM_PROMPT)
+    return create_react_agent(_chat_model(), [calculator, web_search], prompt=SYSTEM_PROMPT)
 
 
 CONTROLLED_SYSTEM_PROMPT = (
@@ -182,7 +207,6 @@ def build_controlled_react_agent(responses: Sequence[str]):
     The model still decides when and how to call the tool. The fake tool simply returns a
     planned sequence, which makes live-agent loop behavior reproducible.
     """
-    from langchain_openai import ChatOpenAI
     from langgraph.prebuilt import create_react_agent
 
     planned = list(responses)
@@ -199,5 +223,4 @@ def build_controlled_react_agent(responses: Sequence[str]):
         call_count += 1
         return result
 
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    return create_react_agent(model, [check_status], prompt=CONTROLLED_SYSTEM_PROMPT)
+    return create_react_agent(_chat_model(), [check_status], prompt=CONTROLLED_SYSTEM_PROMPT)

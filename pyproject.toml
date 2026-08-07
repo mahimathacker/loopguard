@@ -28,6 +28,7 @@ langgraph = [
   "langgraph>=0.2.0",
 ]
 semantic = [
+  "langchain-google-genai>=3.1.0",
   "openai>=1.0.0",
 ]
 server = [
@@ -37,6 +38,7 @@ server = [
 demo = [
   "ddgs>=9.0.0",
   "langchain-core>=0.3.0",
+  "langchain-google-genai>=3.1.0",
   "langchain-openai>=0.2.0",
   "langgraph>=0.2.0",
   "openai>=1.0.0",
