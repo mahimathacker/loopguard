@@ -206,6 +206,8 @@ LOOPGUARD_EMBEDDING_PROVIDER=gemini  # requires GOOGLE_API_KEY or GEMINI_API_KEY
 
 ## Local Demos
 
+[Watch the LoopGuard demo on YouTube](https://youtu.be/i5XRrvFoPA0).
+
 The repo includes a FastAPI/WebSocket backend, a Next.js + React Flow UI, and local demo
 scenarios:
 
