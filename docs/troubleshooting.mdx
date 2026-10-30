@@ -1,0 +1,139 @@
+---
+title: Troubleshooting
+description: Diagnose missing imports, provider failures, unexpected decisions, and demo connection problems.
+---
+
+Start with a small trace or the offline `exact` demo. That helps separate local
+integration problems from model and embedding calls.
+
+## Import does not work
+
+**Problem:** `import loopguard` fails after installation.
+
+**Likely reason:** the package was installed in a different Python environment,
+or the package name was used as the import name.
+
+**What to check:** install **`loopguard-runtime`**, then import **`loopguard`**.
+Use the Python interpreter for your application when inspecting the installation:
+
+```bash
+python -m pip show loopguard-runtime
+python -c "from loopguard import LoopGuardCallbackHandler; print(LoopGuardCallbackHandler)"
+```
+
+If `langchain_core` or `langgraph` is missing, install the framework extra:
+
+```bash
+python -m pip install "loopguard-runtime[langgraph]"
+```
+
+## Semantic detection does not work
+
+**Problem:** paraphrased calls aren't producing semantic evidence, or embedding
+calls fail.
+
+**Likely reason:** the detector isn't enabled, its SDK is missing, the provider is
+wrong, or credentials/model access are unavailable.
+
+**What to check:** install the `semantic` extra, set `live.semantic: true`, and
+explicitly set `LOOPGUARD_EMBEDDING_PROVIDER` to `openai` or `gemini`. Supply the
+matching API key in the process environment. Library calls do not load `.env`
+automatically; the demo entry points do.
+
+Similarity thresholds and window size also matter. Review the tool arguments being
+embedded and compare real scores before changing sensitivity. See
+[semantic setup](/guides/configuration#enable-semantic-detection).
+
+## Exact works but another demo scenario fails
+
+**Problem:** `exact` runs, but a controlled or real-agent scenario doesn't.
+
+**Likely reason:** `exact` is the only entirely offline scenario. The other runs
+need a chat model, embeddings, or both.
+
+**What to check:** consult the [scenario requirements](/demo/scenarios#what-each-run-needs).
+Set both provider selectors, check the relevant credentials, and restart the backend
+after changing `.env`. `/runtime` shows selected settings but does not verify access.
+
+## The agent repeats but LoopGuard does not stop it
+
+**Problem:** the trace contains repeated work, but execution continues.
+
+**Likely reason:** one of several different situations:
+
+- The call count is below the threshold, or the calls don't fit inside the event window.
+- Outputs change, so repetition alone is only warning evidence.
+- `interrupt_on_fatal=False` enables observation without interruption.
+- LangChain suppresses callback exceptions, or the agent catches tool errors.
+- No tool callbacks are being emitted; directly calling a Python function isn't a tool event.
+
+**What to check:** read `signals` and `decisions` separately. If the decision is
+`stop` but the agent continues, set `handler.raise_error = True` and ensure
+`LoopGuardInterrupt` escapes tool-error handlers. See
+[interrupt propagation](/guides/integration#let-the-interrupt-reach-your-application).
+
+If no events were recorded, confirm that the callbacks are passed into the actual
+tool invocation, including inside custom graph nodes.
+
+## A healthy run was marked as stuck
+
+**Problem:** normal polling or retries produce unwanted stop decisions.
+
+**Likely reason:** output stays textually identical, heuristics see error-like
+language, or older signals combine with new evidence. Output comparisons use
+truncated text, not your application's full completion state.
+
+**What to check:** inspect the decision's reasons and the tool results. Tune
+sensitivity using healthy and stuck examples in observe-only mode. Raising
+`stall_patience` changes only `StallDetector`, not `ProgressDetector`; `_fatal: false`
+does not disable every policy stop. Start with [configuration](/guides/configuration).
+
+## UI cannot connect to the backend
+
+**Problem:** the UI shows a WebSocket error or cannot load its graph.
+
+**Likely reason:** the backend isn't running, or the browser is using the wrong
+backend address.
+
+**What to check:** from the repository root, with the demo Python environment active:
+
+```bash
+uvicorn server:app --reload --port 8000
+```
+
+Open `http://localhost:8000/runtime` in the same browser. The frontend defaults to
+that origin and connects to `ws://localhost:8000/run?scenario=exact` for an exact run.
+If you set `NEXT_PUBLIC_LOOPGUARD_API` in `ui/.env.local`, restart Next.js.
+An `https` API address becomes a `wss` WebSocket address.
+
+Check backend logs as well as the UI. Missing credentials can fail scenario
+construction before useful run messages are streamed. The backend's development
+CORS config allows all origins; this demo setup is not a deployment hardening guide.
+
+## The UI or wrapper reports an error and then a completion message
+
+**Problem:** you see an embedding error or recursion-limit error followed by a
+`done` message whose `interrupted` field is false.
+
+**Likely reason:** the stream wrapper catches the error, emits an `error` message,
+then emits final metrics and `done`. Its interruption flag tracks a policy stop.
+
+**What to check:** treat an `error` message as a failed run even if the final
+`done` message doesn't report interruption. A recursion-limit error means the graph
+hit its own limit before LoopGuard stopped it.
+
+## An OpenAI or Gemini request fails
+
+**Problem:** a provider returns an authentication, quota, model-access, or request error.
+
+**Likely reason:** invalid credentials, exhausted quota, unavailable model, or a
+provider-side request problem.
+
+**What to check:** confirm the provider selectors and configured model first.
+The Gemini chat and embedding defaults are separate models. Check your account's
+access to both, then consult the provider's error documentation:
+[OpenAI errors](https://platform.openai.com/docs/guides/error-codes) or
+[Gemini troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting).
+
+The standalone eval command also runs an OpenAI judge when `OPENAI_API_KEY` is set,
+even if the demo chat provider is Gemini. See [evaluation](/development/evaluation).

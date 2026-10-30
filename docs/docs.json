@@ -35,6 +35,14 @@
         ]
       },
       {
+        "group": "Test and troubleshoot",
+        "pages": [
+          "development/evaluation",
+          "troubleshooting",
+          "development/status"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
           "reference/cli",
