@@ -3,9 +3,16 @@ title: Detecting stuck agents
 description: Recognize repeated actions, stagnant results, failures, cycles, and exceeded budgets.
 ---
 
-A detector reports evidence. The policy decides what to do with it. The examples
-below describe the default behavior; application settings and recent signals can
-change the final decision.
+Repeating an action can be useful. What matters is whether its results show progress.
+
+```text
+same action + progress        -> probably okay
+same action + stagnant result -> suspicious
+```
+
+LoopGuard compares actions with their results. A detector reports evidence; the
+policy combines it into a decision. Repetition alone does not force a stop.
+Application settings and recent signals can change the final decision.
 
 New to the agent execution cycle? [AI agents and loops](/concepts/agents-and-loops)
 explains why repeated activity can be healthy and when it becomes suspicious.
