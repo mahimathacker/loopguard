@@ -55,16 +55,16 @@ Run it:
 python first_run.py
 ```
 
-The final lines are:
+The final summary shows:
 
 ```text
-LoopGuard stopped the run: Run stopped: repeated actions produced no progress.
 Decision: stop
 Tool calls: 3
 ```
 
 LangChain may also log the callback exception. The caught `LoopGuardInterrupt` is
 the expected result: three identical calls returned no useful new information.
+The exception's wording differs between the published release and the checkout.
 The same example is saved in the repository as `examples/first_run.py`.
 
 <Note>

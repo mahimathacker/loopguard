@@ -84,6 +84,9 @@ pip install "loopguard-runtime[semantic]"
 Set `semantic: true` in the `live` section. Choose the embedding provider in your
 process environment:
 
+OpenAI embeddings work with the published `0.2.1` package. Gemini support is in
+the source checkout; its tab below includes the source installation step.
+
 <Tabs>
   <Tab title="OpenAI">
     ```bash
@@ -95,6 +98,9 @@ process environment:
   </Tab>
   <Tab title="Gemini">
     ```bash
+    git clone https://github.com/mahimathacker/loopguard.git
+    cd loopguard
+    pip install -e ".[semantic]"
     export LOOPGUARD_EMBEDDING_PROVIDER=gemini
     export GOOGLE_API_KEY=your-key
     ```

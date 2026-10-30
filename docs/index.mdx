@@ -8,6 +8,13 @@ An agent might repeat a tool call, retry a failing request, or keep searching af
 every result comes back empty. In a larger system, work can also circle between
 agents without anyone finishing it.
 
+<Note>
+These docs follow the current repository. The published `0.2.1` package supports
+the core callback and trace workflows; Gemini support, controlled demo scenarios,
+and additional decision display fields currently require the source checkout.
+See [release scope](/development/status).
+</Note>
+
 Repetition alone does not tell the whole story. Polling a job until it finishes
 can be useful. Asking the same question and getting the same empty answer usually
 isn't. LoopGuard looks at both the repeated behavior and the results.

@@ -5,8 +5,11 @@ description: Current scope, repository layout, and directions that remain roadma
 
 LoopGuard is an alpha project. The package metadata and published PyPI release
 are `0.2.1`, with Python 3.11+ required and classifiers for Python 3.11 and 3.12.
-These docs describe the repository implementation; the checkout can contain
-changes beyond the code bundled in the published release.
+These docs describe the repository implementation. Inspection of the published
+`0.2.1` wheel confirmed that Gemini embeddings/provider selection and controlled
+ReAct demo scenarios are not bundled in that release. The checkout also adds
+`recommended_action` and `stop_reason` to serialized decisions, along with clearer
+stop messages. Use a source installation for those features.
 
 ## Available today
 
