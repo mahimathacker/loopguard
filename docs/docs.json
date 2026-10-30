@@ -45,6 +45,7 @@
       {
         "group": "Reference",
         "pages": [
+          "reference/python",
           "reference/cli",
           "reference/configuration"
         ]
