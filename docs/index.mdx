@@ -1,0 +1,52 @@
+---
+title: Introduction
+description: Catch agents that keep spending steps without getting closer to an answer.
+---
+
+LoopGuard watches an AI agent while it runs and looks for signs that it is stuck.
+An agent might repeat a tool call, retry a failing request, or keep searching after
+every result comes back empty. In a larger system, work can also circle between
+agents without anyone finishing it.
+
+Repetition alone does not tell the whole story. Polling a job until it finishes
+can be useful. Asking the same question and getting the same empty answer usually
+isn't. LoopGuard looks at both the repeated behavior and the results.
+
+```text
+same tool + useful new result   -> continue
+same tool + same empty result   -> stop
+temporary error, then success   -> continue
+same permanent error repeated  -> stop
+```
+
+These are patterns to look for, not guarantees about a fixed number of calls.
+Decisions depend on the active detectors, thresholds, and recorded evidence.
+
+## See the problem
+
+<Frame caption="A real agent keeps searching for an impossible goal. LoopGuard detects repeated intent and interrupts the demo run.">
+  <img src="/images/stuck-agent.png" alt="LoopGuard demo with a red agent-tool loop, semantic repetition evidence, and an interrupted-run verdict" />
+</Frame>
+
+This screenshot comes from the repository's demo. It shows an earlier UI layout;
+the current UI also displays policy decisions and risk scores.
+
+## Where LoopGuard fits
+
+LoopGuard focuses on whether an agent is still making progress. It is not an agent
+framework, a general observability platform, a tracing replacement, or an LLM
+evaluation platform. Keep your existing agent and tracing tools; add LoopGuard
+where you need evidence about repetition and stuck runs.
+
+The Python package includes LangGraph/LangChain tool callbacks, a live-stream
+wrapper, and saved-trace analysis. The local demo helps you compare healthy repeats
+with runs that should stop.
+
+<CardGroup cols={2}>
+  <Card title="Understand the pipeline" icon="diagram-project" href="/how-it-works">
+    Follow an event from the agent to a runtime decision.
+  </Card>
+  <Card title="Explore the source" icon="github" href="https://github.com/mahimathacker/loopguard">
+    Read the implementation, examples, and tests.
+  </Card>
+</CardGroup>

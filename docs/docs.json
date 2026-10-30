@@ -1,0 +1,35 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "LoopGuard",
+  "description": "Detect stuck AI agents without treating every retry as a loop.",
+  "colors": {
+    "primary": "#0369A1",
+    "light": "#38BDF8",
+    "dark": "#0284C7"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Start here",
+        "pages": ["index", "how-it-works"]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      { "label": "GitHub", "href": "https://github.com/mahimathacker/loopguard" },
+      { "label": "PyPI", "href": "https://pypi.org/project/loopguard-runtime/" }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Watch the demo",
+      "href": "https://youtu.be/i5XRrvFoPA0"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mahimathacker/loopguard"
+    }
+  }
+}
