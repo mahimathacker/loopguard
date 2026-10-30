@@ -19,7 +19,8 @@
   },
   "seo": {
     "metatags": {
-      "robots": "index, follow"
+      "robots": "index, follow",
+      "canonical": "https://independent-6adc4cfc.mintlify.site"
     }
   },
   "colors": {

@@ -78,8 +78,8 @@ Reference
 ```
 
 Every public `.mdx` page belongs in `docs.json`. Use root-relative site links such
-as `/guides/configuration`. README links at the repository root use real file paths
-so they work on GitHub before hosting exists.
+as `/guides/configuration`. Guide links in the root README use real file paths
+for browsing source on GitHub; the Docs button opens the published site.
 
 ## Automated maintenance
 
@@ -93,8 +93,8 @@ and local equivalents. The three workflows live in `.github/workflows/`:
 - `external-links.yml`: a weekly/manual Lychee check of public documentation URLs.
   Its schedule takes effect after the workflow reaches the default branch.
 
-`python scripts/check_docs.py --release` fails on the current hosted-URL placeholder
-and two screenshot placeholders. Normal checks warn so in-progress docs can be
+`python scripts/check_docs.py --release` fails on the two remaining screenshot
+placeholders. Normal checks warn so in-progress docs can be
 reviewed. Version tags and manual release-readiness runs use the strict check.
 These checks do not publish the docs. Require the relevant status checks in branch
 protection if they should block merging.
@@ -107,8 +107,8 @@ navigation. SDK guidance in `docs.json` under `markdown.instructions` is include
 in the agent-facing exports. See [Mintlify's export documentation](https://www.mintlify.com/docs/ai/markdown-export).
 
 The checked-in `robots.txt` allows crawling. `seo.metatags.robots` permits page
-indexing. Mintlify generates `/sitemap.xml`; after confirming the public domain,
-add its absolute URL as a `Sitemap:` directive to `robots.txt`.
+indexing. Mintlify generates `/sitemap.xml`; `robots.txt` points to its absolute
+URL on the published domain. The canonical URL in `docs.json` uses that domain too.
 
 After deployment, verify `/robots.txt`, `/sitemap.xml`, `/llms.txt`,
 `/llms-full.txt`, and `/getting-started.md` on the actual docs domain. Confirm that
@@ -200,8 +200,8 @@ avoid clipping the later success out of the recovery capture.
 - The published 0.2.1 wheel was inspected: Gemini support, controlled demo scenarios,
   and additional serialized decision display fields require the source checkout.
 - Add the two captures and verify local search after Mintlify login if needed.
-- Replace `[DOCS URL TO ADD AFTER DEPLOYMENT]` in the root README only when a real
-  hosted URL exists; point the Docs button to it at the same time.
+- If the hosted domain changes, update the README Docs button and hosted link,
+  the canonical URL in `docs.json`, and the sitemap URL in `robots.txt` together.
 
 ## Verification completed
 
@@ -224,8 +224,8 @@ avoid clipping the later success out of the recovery capture.
 - The local backend's runtime and graph routes and the exact WebSocket run were
   checked without making provider calls.
 - Workflow syntax passed actionlint. The external-link checker passed against
-  the actual public links. Strict release checking correctly failed on the three
-  remaining reader-facing publication placeholders.
+  the actual public links. Strict release checking flags the two remaining
+  reader-facing screenshot placeholders.
 - ChatGPT, Claude, Google AI Studio, Perplexity, and Grok context-menu actions
   were checked at desktop and mobile widths, including the generated page URLs
   and copy/Markdown alternatives.
@@ -291,16 +291,19 @@ docs/
     healthy-calculation.png
 ```
 
-## Publish later
+## Hosted site and deployment
 
-No hosting setup or deployment is part of this change. After content review and
-approval to publish:
+The documentation is published at
+[independent-6adc4cfc.mintlify.site](https://independent-6adc4cfc.mintlify.site/).
+On October 30, 2026, the homepage, getting-started guide, `/robots.txt`,
+`/llms.txt`, `/llms-full.txt`, `/getting-started.md`, and `/sitemap.xml`
+returned HTTP 200. The sitemap listed all 20 documentation pages.
 
-1. Connect `mahimathacker/loopguard` to your Mintlify project.
-2. Choose the reviewed branch and set the documentation/content path to `/docs`.
-3. Preview the build, then publish using the Mintlify dashboard.
-4. Add the resulting public URL to the root README.
+Mintlify is connected to `mahimathacker/loopguard`, with `master` as the deployment
+branch and `/docs` as the documentation/content path. Review future changes in
+a pull request, check the preview and CI results, and verify the public site after
+the merged changes deploy.
 
 See [Mintlify monorepo setup](https://www.mintlify.com/docs/deploy/monorepo) for the
-content-path setting. Do not invent a `loopguard.mintlify.app` address before the
-project has a confirmed domain.
+content-path setting. Only replace the public URL after the new domain has been
+configured in Mintlify and its pages and discovery endpoints have been verified.
