@@ -6,6 +6,7 @@
   "markdown": {
     "instructions": [
       "LoopGuard is a Python runtime guardrail SDK. Install loopguard-runtime and import loopguard. Use /getting-started and /guides/integration for application code.",
+      "For background on AI agents and useful versus stuck loops, start with /concepts/agents-and-loops. Distinguish general evaluation concepts from the features LoopGuard implements.",
       "The exact, semantic, calc, and trap UI examples illustrate Python SDK detection behavior. Read /demo/scenarios for runnable SDK equivalents. The demo backend calls stream_run; LoopGuard.stream wraps the same runner.",
       "These docs follow the checkout. PyPI 0.2.1 lacks Gemini support, controlled demo scenarios, and additional decision display fields; check /development/status before describing release capabilities.",
       "Repetition alone does not force STOP. REPLAN and PAUSE are recorded recommendations. Observe-only mode records decisions without raising. Follow /guides/integration for interrupt propagation.",
@@ -30,6 +31,12 @@
           "index",
           "getting-started",
           "how-it-works"
+        ]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
+          "concepts/agents-and-loops"
         ]
       },
       {
