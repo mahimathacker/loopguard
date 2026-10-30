@@ -1,42 +1,38 @@
 ---
-title: Introduction
+title: LoopGuard
+sidebarTitle: Introduction
 description: Catch agents that keep spending steps without getting closer to an answer.
 ---
 
-LoopGuard watches an AI agent while it runs and looks for signs that it is stuck.
-An agent might repeat a tool call, retry a failing request, or keep searching after
-every result comes back empty. In a larger system, work can also circle between
-agents without anyone finishing it.
-
-<Note>
-These docs follow the current repository. The published `0.2.1` package supports
-the core callback and trace workflows; Gemini support, controlled demo scenarios,
-and additional decision display fields currently require the source checkout.
-See [release scope](/development/status).
-</Note>
-
-Repetition alone does not tell the whole story. Polling a job until it finishes
-can be useful. Asking the same question and getting the same empty answer usually
-isn't. LoopGuard looks at both the repeated behavior and the results.
+LoopGuard watches an AI agent while it runs and checks whether it is still making
+progress. It detects loops, repeated failures, and stalled runs while allowing
+useful polling and retries to continue.
 
 ```text
 same tool + useful new result   -> continue
 same tool + same empty result   -> stop
-temporary error, then success   -> continue
-same permanent error repeated  -> stop
+503 -> 503 -> success           -> continue
+401 -> 401 -> 401               -> stop
 ```
 
 These are patterns to look for, not guarantees about a fixed number of calls.
 Decisions depend on the active detectors, thresholds, and recorded evidence.
 
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="terminal" href="/getting-started">
+    Install the SDK and catch a stuck tool loop without an API key.
+  </Card>
+  <Card title="View GitHub" icon="github" href="https://github.com/mahimathacker/loopguard">
+    Explore the Python SDK, examples, and tests.
+  </Card>
+</CardGroup>
+
 ## See the problem
 
-<Frame caption="A real agent keeps searching for an impossible goal. LoopGuard detects repeated intent and interrupts the demo run.">
+<Frame caption="Screenshot from a LoopGuard demo run showing repeated intent and an interrupted run.">
   <img src="/images/stuck-agent.png" alt="LoopGuard demo with a red agent-tool loop, semantic repetition evidence, and an interrupted-run verdict" />
 </Frame>
 
-This screenshot comes from the repository's demo. It shows an earlier UI layout;
-the current UI also displays policy decisions and risk scores.
 The [visual examples and SDK code](/demo/scenarios#run-the-visual-examples-through-the-sdk)
 show how to inspect the same detection behavior from Python.
 
@@ -51,9 +47,15 @@ The Python package includes LangGraph/LangChain tool callbacks, a live-stream
 wrapper, and saved-trace analysis. The local demo helps you compare healthy repeats
 with runs that should stop.
 
+<Note>
+The published `0.2.1` package supports the core callback and trace workflows.
+Gemini support, controlled demo scenarios, and additional decision display fields
+currently require the source checkout. See [release scope](/development/status).
+</Note>
+
 <CardGroup cols={2}>
-  <Card title="Run your first example" icon="terminal" href="/getting-started">
-    Exercise real tool callbacks without a model or API key.
+  <Card title="Integrate with your agent" icon="plug" href="/guides/integration">
+    Attach callbacks and handle runtime stop decisions.
   </Card>
   <Card title="Understand the pipeline" icon="diagram-project" href="/how-it-works">
     Follow an event from the agent to a runtime decision.

@@ -62,51 +62,29 @@ Decision: stop
 Tool calls: 3
 ```
 
-LangChain may also log the callback exception. The caught `LoopGuardInterrupt` is
-the expected result: three identical calls returned no useful new information.
-The exception's wording differs between the published release and the checkout.
-The same example is saved in the repository as `examples/first_run.py`.
+Three identical calls returned no useful new information, so LoopGuard requests
+a stop. The callback raises `LoopGuardInterrupt`, which the example catches.
+LangChain may also log the callback exception; that is expected for this run.
 
 <Note>
-`raise_error = True` is a LangChain callback setting. It lets the callback's
-exception propagate. If your agent catches tool exceptions and turns them into
-tool results, you must also let `LoopGuardInterrupt` escape that error handler.
-See [integration details](/guides/integration#let-the-interrupt-reach-your-application).
+`handler.raise_error = True` lets LangChain propagate the interrupt. Your agent's
+tool-error handlers must also let it escape. Follow the
+[integration guide](/guides/integration#let-the-interrupt-reach-your-application)
+when attaching LoopGuard to your own agent.
 </Note>
 
-## Observe without interrupting
-
-Replace the handler construction above with:
+To record decisions without stopping execution, replace the handler construction:
 
 ```python
 handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
 ```
 
-All three calls finish. LoopGuard still records the signals and the `stop`
-decision. This is useful when checking thresholds against your application's
-normal retries before enabling interruption.
-
-<Note>
-In the callback report, `interrupted: true` means the policy reached `STOP` at
-some point. It does not prove the framework actually stopped. This flag is also
-true in observe-only mode when the policy recommends stopping.
-</Note>
-
-## Read the report
-
-| Entry | What it tells you |
-| --- | --- |
-| `events` | The recorded tool calls, results, and errors. |
-| `signals` | Detector evidence, including the reason and score. |
-| `decisions` | Policy actions and the evidence used to choose them. |
-| `metrics` | Counts such as recorded steps, tool calls, and repeat rate. |
-
-The report also includes `alerts` for compatibility. For new integrations, start
-with `signals` and `decisions`.
+All three calls finish, while the report still records a `stop` recommendation.
+Its `interrupted` flag records that recommendation, not proof that execution stopped.
+See [observe-only mode](/guides/integration#observe-first) and the
+[report reference](/reference/python#read-the-result) for details.
 
 ## Next steps
 
 - [Add LoopGuard to a LangGraph/LangChain run](/guides/integration).
-- [Understand detection](/how-it-works).
-- [Tune configuration](/guides/configuration).
-- [Analyze saved traces](/guides/saved-traces).
+- [Understand healthy repetition and stuck runs](/detection).

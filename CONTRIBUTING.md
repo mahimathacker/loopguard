@@ -36,10 +36,9 @@ a documentation update covers a code change, and it does not rewrite content.
 Unresolved publication placeholders warn during normal checks. Before a release,
 run `python scripts/check_docs.py --release` to fail if any remain in reader-facing
 content. Version-tag builds and the workflow's release-readiness option run the
-same strict check. The current missing hosted URL and two screenshots must be
-resolved before that check can pass.
+same strict check.
 
 Read the [contributing guide](docs/development/contributing.mdx) for CI behavior,
 or [add a trace regression case](docs/guides/regression-checks.mdx) to document
-expected healthy and stuck behavior. See [the maintainer handoff](docs/README.md)
-for local preview and later publishing.
+expected healthy and stuck behavior. See [the documentation guide](docs/README.md)
+for local preview and publishing.

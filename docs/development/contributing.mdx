@@ -7,6 +7,10 @@ A useful contribution explains the problem, includes an example, and shows how
 the change was checked. For detection changes, include both a stuck run and a
 healthy run that should keep working.
 
+The [published documentation](https://loopguard.mintlify.site/) uses the `docs/`
+folder on `master` in `mahimathacker/loopguard` as its Git source. Keep SDK and
+documentation changes in the same pull request so they can be reviewed together.
+
 ## Run the local checks
 
 From the repository root, with Python 3.11+:
@@ -88,8 +92,7 @@ still decides whether the documentation is correct. There is no automated rewrit
 ## Investigate a weekly external-link failure
 
 The schedule is Monday at 08:47 Asia/Kolkata (03:17 UTC), subject to GitHub's
-scheduler delays. Scheduled runs use the workflow on the default branch, so the
-schedule starts after these changes are merged there.
+scheduler delays. Scheduled runs use the workflow on the default branch.
 
 Open the failed workflow's job summary and inspect each URL. A 404 may need a new
 destination. A 403, rate limit, or timeout can mean the remote site blocked or
@@ -104,20 +107,18 @@ an exclusion just to get a green check.
 
 ## Check publication readiness
 
-Normal PR checks warn about reader-facing hosted-URL and screenshot placeholders
-so work in progress remains reviewable. Before publication:
+Run the strict documentation check before publishing or tagging a release:
 
 ```bash
 python scripts/check_docs.py --release
 ```
 
-The strict check must pass after the hosted URL and required screenshots are real.
+The strict check rejects unresolved publication placeholders in reader-facing content.
 The same check runs for tags beginning with `v` and when **release_ready** is selected
 in the Documentation workflow's manual inputs. It does not create a release or
 publish to PyPI or Mintlify.
 
-The maintainer handoff is excluded from publication and can describe the remaining
-tasks. Placeholder examples inside code fences do not count as unfinished content.
+Placeholder examples inside code fences do not count as unfinished content.
 
 ## Add evidence with your contribution
 

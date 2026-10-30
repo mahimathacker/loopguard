@@ -108,8 +108,8 @@ The helper uses default settings when you omit `config_path`.
 
 ## Use the stream wrapper for supported graph updates
 
-The demo backend and CLI call `stream_run()` directly. `LoopGuard.stream()` is
-the public SDK wrapper around that same runner:
+Use `LoopGuard.stream()` to inspect supported streamed graph updates and the
+decisions LoopGuard records:
 
 ```python
 from loopguard import LoopGuard

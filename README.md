@@ -4,7 +4,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
 [![PyPI monthly downloads](https://img.shields.io/pypi/dm/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
 
-[![Docs](https://img.shields.io/badge/Docs-2563EB?style=for-the-badge)](docs/index.mdx)
+[![Docs](https://img.shields.io/badge/Docs-2563EB?style=for-the-badge)](https://loopguard.mintlify.site/)
 [![PyPI](https://img.shields.io/badge/PyPI-3775A9?style=for-the-badge)](https://pypi.org/project/loopguard-runtime/)
 [![Demo](https://img.shields.io/badge/Demo-FF0000?style=for-the-badge)](https://youtu.be/i5XRrvFoPA0)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge)](https://github.com/mahimathacker/loopguard)
@@ -33,8 +33,7 @@ the actual decision.
 
 [![LoopGuard catching a real search agent in a semantic loop and interrupting the run](ui/public/realagentloop.png)](https://youtu.be/i5XRrvFoPA0)
 
-An agent keeps searching for an impossible confirmation. LoopGuard flags repeated
-intent and interrupts the demo. This repository capture shows an earlier UI layout.
+Screenshot from a LoopGuard demo run showing repeated intent and an interrupted run.
 The [four visual examples](docs/demo/scenarios.mdx) pair detection explanations
 with Python SDK code so you can inspect the same behavior in your own program.
 
@@ -132,7 +131,7 @@ harness. [Evaluation and its limits →](docs/development/evaluation.mdx)
 
 ## Documentation
 
-**Hosted documentation:** [DOCS URL TO ADD AFTER DEPLOYMENT]
+**Hosted documentation:** [Read the LoopGuard docs](https://loopguard.mintlify.site/).
 
 The [Mintlify source](docs/index.mdx) covers the full developer journey.
 The [concept guides](docs/concepts/agents-and-loops.mdx) explain agent loops,
