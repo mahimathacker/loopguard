@@ -1,0 +1,111 @@
+---
+title: Tests, traces, and evals
+description: Check the answer and the path, and choose the right evaluator for each kind of failure.
+---
+
+A final answer can look right even when the agent queried the wrong data, ignored
+a tool result, or spent most of the run repeating itself. Evaluating an agent means
+checking the outcome and the observable path that produced it.
+
+For a sales-analysis agent, these are separate questions:
+
+| What you evaluate | Example question |
+| --- | --- |
+| Answer quality | Does the reported trend match the source data? |
+| Tool choice | Did the agent select the database tool rather than a web search? |
+| Arguments and context | Did it use the correct date range, table, and retrieved evidence? |
+| Run behavior | Did the agent recover from failures, advance, and finish within its limits? |
+
+One final-answer score cannot explain every failure. Decide what you want to check
+before choosing how to score it.
+
+## Tests ask whether behavior meets expectations
+
+A test supplies inputs and checks expected behavior. An agent evaluation can apply
+several checks to the same run: tool arguments, task completion, answer quality,
+and unnecessary repeated work.
+
+An exact-output assertion can work for a deterministic function. For an agent,
+several answers or action sequences may be acceptable. Define the properties that
+matter rather than requiring one exact wording or one fixed path.
+
+Repeat model-backed trials when you need to understand variability. Keep the task
+and environment comparable, and retain individual failures instead of relying only
+on an average. Offline unit tests with fake agents can still be deterministic.
+
+## Traces show what was recorded
+
+A trace is the recorded path of a run or request. Inspecting it helps answer which
+tools ran, what arguments were passed, what results came back, and where failures
+or repeated actions appeared.
+
+In distributed tracing, a **span** represents an operation with a start, end,
+attributes, and a relationship to the rest of the trace. **Instrumentation** is the
+code or library support that records those operations. See
+[OpenTelemetry's trace concepts](https://opentelemetry.io/docs/concepts/signals/traces/)
+for the tracing model.
+
+LoopGuard uses a smaller event model. Its callbacks record tool starts, results,
+and errors as ordered events. An event is not an OpenTelemetry span: it does not
+provide a timed operation with parent/child span context. A LoopGuard report is
+also not a complete record of memory, retrieval, model calls, or private reasoning.
+
+For latency, token usage, provider cost, or deeper context inspection, keep the
+appropriate application instrumentation alongside LoopGuard.
+
+## Choose an evaluator for the question
+
+| Method | Good fit | What still needs care |
+| --- | --- | --- |
+| Code-based checks | Valid JSON, expected tool and arguments, calculation results, or step limits. | A passing rule only proves the property it checks. |
+| LLM-as-a-judge | A rubric for usefulness, clarity, or whether an answer is supported by supplied evidence. | The judge can be inconsistent, biased, or wrong. |
+| Human review | Ambiguous goals, domain-specific quality, and decisions where context matters. | Reviewers need clear criteria and a way to resolve disagreements. |
+
+For example, checking whether a router selected `order_status_check` with
+`order_number=1234` can be a code assertion. Deciding whether a summary explains
+the right caveats may need a rubric and review. Neither check establishes that the
+run avoided loops.
+
+Use model judges as evaluators, not as automatic ground truth. Compare their
+labels with reviewed examples, inspect disagreements, and make the rubric explicit.
+Known limitations include position and verbosity biases, discussed in
+[Judging LLM-as-a-Judge](https://arxiv.org/abs/2306.05685).
+
+## Separate runtime guardrails from offline evaluation
+
+| During a run | After a run |
+| --- | --- |
+| A guardrail can react to observed evidence and request interruption. | An evaluator can compare the recorded behavior and outcome with expectations. |
+| It acts before the full outcome is known. | It can use completed outputs, reference data, and reviewer labels. |
+| A mistaken stop can interrupt useful work. | A missed regression can leave a bad behavior unnoticed. |
+
+LoopGuard supports both runtime monitoring and replaying saved traces. Both use
+the same detector and policy machinery. Replay analysis does not rerun the original
+agent, grade its answer, or validate its tool selection against the user's intent.
+
+The repository's small LLM-judge example is an evaluation demonstration. It is not
+part of the default live stop policy or the offline trace CLI.
+
+## Know what a LoopGuard result means
+
+A report's `signals` explain detector evidence; its `decisions` describe policy
+actions. A `continue` decision means the policy did not request a stronger action
+for that observation. It does not prove that the answer is correct or the task is
+complete. A `stop` decision identifies a reason to interrupt, not a final-answer grade.
+
+Likewise, `risk_score` is a policy score used to select actions, not a calibrated
+probability that the run is stuck. The code assigns scores and combines signal
+types; it does not establish a statistical confidence estimate.
+
+When tuning detection, inspect two kinds of error:
+
+- **False positive:** a healthy run is flagged or stopped unnecessarily.
+- **False negative:** a known stuck run is missed.
+
+Choose the label you are measuring. A detector warning and an enforced runtime
+stop are different predictions. The repository's exact-detector evaluation scores
+whether evidence fires; its labeled trace tests also check final policy decisions.
+
+Start with [evaluation and tests](/development/evaluation) for the implemented
+checks, or [agent trajectories](/concepts/trajectory-and-convergence) for comparing
+the paths that successful runs take.
