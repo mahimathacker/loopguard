@@ -34,6 +34,8 @@ From the repository root, also run:
 
 ```bash
 python -m unittest discover -v
+python scripts/check_docs.py
+python scripts/verify_doc_examples.py
 python examples/first_run.py
 python -m loopguard.ingest examples/sample_trace.json --json
 python -m loopguard.check examples/sample_trace.json --json
@@ -60,6 +62,7 @@ Use LoopGuard
   LangGraph and LangChain
   Configure LoopGuard
   Analyze saved traces
+  Add a trace regression check
 Explore the demo
   Demo scenarios
   Run the demo UI
@@ -67,6 +70,7 @@ Test and troubleshoot
   Evaluation and tests
   Troubleshooting
   Project status
+  Contributing and docs maintenance
 Reference
   Python API
   CLI reference
@@ -76,6 +80,24 @@ Reference
 Every public `.mdx` page belongs in `docs.json`. Use root-relative site links such
 as `/guides/configuration`. README links at the repository root use real file paths
 so they work on GitHub before hosting exists.
+
+## Automated maintenance
+
+See [the contributing guide](development/contributing.mdx) for the CI behavior
+and local equivalents. The three workflows live in `.github/workflows/`:
+
+- `documentation.yml`: tests, offline docs checks, README example execution,
+  Mintlify build, and internal link checks on PRs and pushes.
+- `docs-drift.yml`: a file-based PR warning and summary for developer-facing changes
+  without Markdown updates. It does not rewrite docs or prove coverage.
+- `external-links.yml`: a weekly/manual Lychee check of public documentation URLs.
+  Its schedule takes effect after the workflow reaches the default branch.
+
+`python scripts/check_docs.py --release` fails on the current hosted-URL placeholder
+and two screenshot placeholders. Normal checks warn so in-progress docs can be
+reviewed. Version tags and manual release-readiness runs use the strict check.
+These checks do not publish the docs. Require the relevant status checks in branch
+protection if they should block merging.
 
 ## Agent discovery
 
@@ -164,15 +186,16 @@ avoid clipping the later success out of the recovery capture.
 
 ## Verification completed
 
-- All 49 offline tests passed with framework dependencies installed.
+- All 72 runtime and documentation automation tests passed with framework dependencies installed.
 - The first-run example passed against both the source checkout and the actual
   published 0.2.1 wheel.
 - A real LangGraph `ToolNode` run propagated the stop exception when configured
   to let tool errors escape.
 - Mintlify full validation/build and internal link checks passed.
-- All 18 pages rendered successfully in Chrome with no broken images. The
+- All 20 pages rendered successfully in Chrome with no broken images. The
   introduction, getting-started page, demo scenarios, config reference, and all
-  three concept pages were checked at a 390px viewport without document overflow.
+  three concept pages, plus the two new practical guides, were checked at a 390px
+  viewport without document overflow.
 - Mintlify found alt text on every image. Brand colors meet the check's AA/minimum
   contrast thresholds; its optional AAA suggestion remains a warning.
 - Python code blocks parsed, JSON/YAML samples loaded, and nine trace/example
@@ -181,6 +204,9 @@ avoid clipping the later success out of the recovery capture.
   limitations described in the concept guide were checked against the helper.
 - The local backend's runtime and graph routes and the exact WebSocket run were
   checked without making provider calls.
+- Workflow syntax passed actionlint. The external-link checker passed against
+  the actual public links. Strict release checking correctly failed on the three
+  remaining reader-facing publication placeholders.
 
 Provider-backed scenarios were inspected in source, not run against paid APIs.
 Local search requires Mintlify login and was not activated.
@@ -189,6 +215,18 @@ Local search requires Mintlify login and was not activated.
 
 ```text
 README.md
+CONTRIBUTING.md
+.lychee.toml
+.github/workflows/
+  documentation.yml
+  docs-drift.yml
+  external-links.yml
+scripts/
+  check_docs.py
+  check_docs_drift.py
+  verify_doc_examples.py
+tests/
+  test_docs_automation.py
 examples/
   first_run.py
   langgraph_callback_demo.py
@@ -210,12 +248,14 @@ docs/
     integration.mdx
     configuration.mdx
     saved-traces.mdx
+    regression-checks.mdx
   demo/
     scenarios.mdx
     running-locally.mdx
   development/
     evaluation.mdx
     status.mdx
+    contributing.mdx
   reference/
     python.mdx
     cli.mdx

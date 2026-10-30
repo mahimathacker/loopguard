@@ -18,6 +18,7 @@ SURFACES = {
     "CLI commands": ("loopguard/check.py", "loopguard/ingest.py", "loopguard/evals.py"),
     "Configuration": ("loopguard/config.py", "loopguard/guard.py", "loopguard/langgraph.py"),
     "Scenarios and providers": ("loopguard/scenarios.py", "loopguard/agent.py", "loopguard/embeddings.py", "main.py", ".env.example"),
+    "Demo server and frontend integration": ("server.py", "ui/app/page.tsx", "ui/app/types.ts"),
     "Package version, Python support, and extras": ("pyproject.toml",),
 }
 

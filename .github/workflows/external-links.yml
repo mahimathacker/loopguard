@@ -22,6 +22,7 @@ jobs:
         with:
           args: >-
             --config .lychee.toml
+            --root-dir "${{ github.workspace }}/docs"
             README.md CONTRIBUTING.md "docs/**/*.md" "docs/**/*.mdx"
           lycheeVersion: v0.24.2
           fail: true

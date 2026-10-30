@@ -47,7 +47,8 @@
           "detection",
           "guides/integration",
           "guides/configuration",
-          "guides/saved-traces"
+          "guides/saved-traces",
+          "guides/regression-checks"
         ]
       },
       {
@@ -62,7 +63,8 @@
         "pages": [
           "development/evaluation",
           "troubleshooting",
-          "development/status"
+          "development/status",
+          "development/contributing"
         ]
       },
       {

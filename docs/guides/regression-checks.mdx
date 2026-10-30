@@ -1,0 +1,106 @@
+---
+title: Add a trace regression check
+description: Turn a healthy or stuck run into a repeatable test without rerunning the original agent.
+---
+
+When a detection bug is fixed, keep an example of the original behavior. Otherwise
+a later threshold or policy change can bring it back unnoticed.
+
+The repository's labeled trace fixture and offline tests provide a starting point.
+You do not need a model API key to replay them.
+
+## Choose what the case should prove
+
+Keep healthy and unhealthy behavior together. If you add an empty-result loop,
+also retain healthy polling where the tool repeats but the output advances.
+
+Write down the expected policy decision before tuning the implementation. Do not
+label every repeated call as stuck, or assume a `continue` decision proves that the
+agent answered correctly. Answer quality needs separate checks.
+
+## Add a labeled run
+
+`examples/v02_labeled_traces.json` is a list of runs. Each includes a `run_id`,
+`label`, `expected_decision`, a short explanation in `why`, and the recorded `steps`.
+For example, a healthy polling case can look like this:
+
+```json
+{
+  "run_id": "healthy-job-status",
+  "label": "healthy",
+  "expected_decision": "continue",
+  "why": "the same tool returns advancing status",
+  "steps": [
+    {"agent": "worker", "tool": "poll_job", "args": {"job_id": "42"}, "output": "pending"},
+    {"agent": "worker", "tool": "poll_job", "args": {"job_id": "42"}, "output": "processing"},
+    {"agent": "worker", "tool": "poll_job", "args": {"job_id": "42"}, "output": "completed"}
+  ]
+}
+```
+
+Append the case to the fixture's existing list. Use a distinct ID and keep only
+the details needed to reproduce the behavior. Preserve tool results and caller
+information when they matter to the detection.
+
+`label`, `why`, and `expected_decision` are test annotations; the trace analyzer
+does not use them to choose its decision. The existing test compares the replayed
+final decision with `expected_decision`.
+
+## Replay and compare
+
+From the source checkout:
+
+```bash
+python -m loopguard.ingest examples/v02_labeled_traces.json --json
+python -m unittest tests.test_loopguard.IngestTests.test_v02_labeled_traces_match_expected_final_decisions -v
+```
+
+The replay does not call the original tools or the model. If a decision differs,
+inspect the recorded results, detector signals in a live report, and the policy
+rules before changing the expected label.
+
+To inspect the same expected-decision comparison in Python:
+
+```python
+import json
+from pathlib import Path
+from loopguard.ingest import analyze_file
+
+path = Path("examples/v02_labeled_traces.json")
+cases = json.loads(path.read_text())
+reports = {report.run_id: report for report in analyze_file(path)}
+
+for case in cases:
+    decision = reports[case["run_id"]].final_decision
+    assert decision is not None, case["run_id"]
+    assert decision.action.value == case["expected_decision"], case["run_id"]
+```
+
+Use dedicated tests for custom detector mixes, semantic embeddings, or callback
+exception propagation. The default offline trace replay does not cover those
+integration paths automatically.
+
+## Use check mode for a different question
+
+A labeled fixture deliberately includes runs that should stop. Those are passing
+regression tests when the expected stop happens. Running this command against that
+same fixture will normally fail:
+
+```bash
+python -m loopguard.check examples/v02_labeled_traces.json
+```
+
+That is expected. `check` asks whether any run violates the selected failure rules;
+it does not compare results with `expected_decision` annotations. Use it to gate a
+collection of runs expected to meet your application's pass/fail rules.
+
+Keep the two checks distinct:
+
+| Question | Appropriate check |
+| --- | --- |
+| Did each labeled example produce the expected policy decision? | The fixture's unit test. |
+| Does this trace collection contain a stop, warning, or exceeded budget that should fail CI? | `python -m loopguard.check` with the chosen rules. |
+
+[Saved-trace flags and exit codes](/guides/saved-traces) explain how to select those
+failure rules. [Contributing and maintenance](/development/contributing) explains
+how the repository runs its checks on pull requests.

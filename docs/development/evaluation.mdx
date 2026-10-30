@@ -27,9 +27,11 @@ pip install -e ".[langgraph]"
 python -m unittest discover -v
 ```
 
-The current suite contains 49 tests. It checks that repeated calls alone don't
+The runtime test module contains 49 tests. It checks that repeated calls alone don't
 force a stop, healthy polling advances, retryable failures can recover, permanent
 failures stop, and action/handoff cycles are detected.
+Discovery also runs the documentation automation tests. See
+[contributing and docs maintenance](/development/contributing) for those checks.
 
 ## Replay the progress-aware fixtures
 
@@ -93,3 +95,4 @@ Include the trace, settings, and expected decision when reporting a detection is
 See [saved-trace analysis](/guides/saved-traces) for the accepted input format.
 To turn observed failures into before/after comparisons, follow the
 [evaluation workflow](/concepts/trajectory-and-convergence#treat-changes-as-experiments).
+For a task-focused walkthrough, [add a trace regression check](/guides/regression-checks).

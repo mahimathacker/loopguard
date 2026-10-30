@@ -121,6 +121,11 @@ class DocumentationDriftTests(unittest.TestCase):
         self.assertIn("Package version, Python support, and extras", surfaces)
         self.assertIn("Scenarios and providers", surfaces)
 
+    def test_backend_and_frontend_contract_changes_are_watched(self):
+        surfaces, docs_changed = review_changes(["server.py", "ui/app/types.ts"])
+        self.assertIn("Demo server and frontend integration", surfaces)
+        self.assertFalse(docs_changed)
+
     def test_docs_change_is_recorded_without_claiming_coverage(self):
         surfaces, docs_changed = review_changes(["loopguard/guard.py", "docs/guides/configuration.mdx"])
         self.assertTrue(surfaces)

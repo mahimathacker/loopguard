@@ -139,6 +139,7 @@ The [concept guides](docs/concepts/agents-and-loops.mdx) explain agent loops,
 tests and traces, and evaluating the path as well as the answer.
 See [preview and deployment instructions](docs/README.md),
 [troubleshooting](docs/troubleshooting.mdx), or the [Python API](docs/reference/python.mdx).
+For changes to the project, read [Contributing](CONTRIBUTING.md).
 
 ## Package and project status
 

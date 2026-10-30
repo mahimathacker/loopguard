@@ -1,0 +1,127 @@
+---
+title: Contributing and docs maintenance
+description: Run the checks, review developer-facing changes, and keep documentation accurate as the SDK evolves.
+---
+
+A useful contribution explains the problem, includes an example, and shows how
+the change was checked. For detection changes, include both a stuck run and a
+healthy run that should keep working.
+
+## Run the local checks
+
+From the repository root, with Python 3.11+:
+
+```bash
+python -m pip install -e ".[langgraph]"
+python -m unittest discover -v
+python scripts/check_docs.py
+python scripts/verify_doc_examples.py
+```
+
+The suite includes the existing runtime tests and the documentation-checking tests.
+The example check uses scripted results with real tool callbacks. It exercises
+normal progress, stop propagation, and observe-only reporting without model calls.
+
+For a docs change, use Node.js 24 and the Mintlify CLI version pinned in CI:
+
+```bash
+npm install --global mint@4.2.1178
+cd docs
+mint validate
+mint broken-links --check-anchors
+```
+
+You can preview with `mint dev --port 3001 --no-open`. A successful local build
+does not publish the site.
+
+## Keeping the docs accurate
+
+LoopGuard checks documentation changes in CI. Pull requests validate docs structure,
+internal links, images, and callback examples. Scheduled checks catch external URLs
+that stop responding successfully over time. Changes to public APIs, CLI commands,
+configuration, providers, scenarios, or package metadata should include the related
+documentation update.
+
+The repository has three workflows:
+
+| Workflow | When it runs | Result |
+| --- | --- | --- |
+| Documentation | PRs, pushes, or a manual run. | Runs tests on Python 3.11/3.12, checks docs and examples, and builds Mintlify. Failures make the workflow fail. |
+| Documentation drift review | PRs. | Adds a warning and job summary when watched code changes have no README/docs edits. |
+| External documentation links | Weekly or manually. | Checks public HTTP URLs with retries and fails with a job summary if any remain unsuccessful. |
+
+Making a failing check block merges requires the repository's branch protection
+or ruleset to require that check. The workflow files do not change those settings.
+
+## What the offline checker covers
+
+`scripts/check_docs.py` checks that navigation targets exist, public pages appear
+in navigation, and local links, heading anchors, and image files resolve. It also
+checks image alt text, code-fence languages and closure, trailing whitespace, and
+Python/JSON code-block syntax. Mintlify validates the full config, MDX, and build.
+
+This is a focused set of Markdown checks, not a general spelling checker or an
+evaluation of every code example's meaning. `scripts/verify_doc_examples.py`
+executes the README and getting-started callback examples; provider-backed examples
+are not exercised by CI.
+
+## Review potential drift
+
+The drift workflow compares the PR's base and head. It watches Python package
+files, the CLI modules, config loaders, scenario/provider code, `.env.example`,
+the demo server/frontend contract, and `pyproject.toml`.
+
+If those change without Markdown changes in README, CONTRIBUTING, or `docs/`,
+the check asks a contributor to review the docs. If docs changed too, its summary
+still lists the affected surfaces so a reviewer can check coverage.
+
+You can run it locally using your PR's base branch:
+
+```bash
+python scripts/check_docs_drift.py --base origin/master --head HEAD
+```
+
+The check uses filenames, not semantic API analysis. An internal edit can trigger
+a reminder; an unrelated docs edit can satisfy the presence check. Human review
+still decides whether the documentation is correct. There is no automated rewrite.
+
+## Investigate a weekly external-link failure
+
+The schedule is Monday at 08:47 Asia/Kolkata (03:17 UTC), subject to GitHub's
+scheduler delays. Scheduled runs use the workflow on the default branch, so the
+schedule starts after these changes are merged there.
+
+Open the failed workflow's job summary and inspect each URL. A 404 may need a new
+destination. A 403, rate limit, or timeout can mean the remote site blocked or
+delayed the check rather than that the documentation moved. Retry the workflow
+and confirm the destination before changing the link.
+
+The Lychee config uses retries, modest concurrency, and HTTP-only checks. It skips
+private/local addresses and sample links in code blocks. It checks README,
+CONTRIBUTING, and documentation Markdown; it does not test every external API or
+the content of a successful response. Do not hide an entire provider domain with
+an exclusion just to get a green check.
+
+## Check publication readiness
+
+Normal PR checks warn about reader-facing hosted-URL and screenshot placeholders
+so work in progress remains reviewable. Before publication:
+
+```bash
+python scripts/check_docs.py --release
+```
+
+The strict check must pass after the hosted URL and required screenshots are real.
+The same check runs for tags beginning with `v` and when **release_ready** is selected
+in the Documentation workflow's manual inputs. It does not create a release or
+publish to PyPI or Mintlify.
+
+The maintainer handoff is excluded from publication and can describe the remaining
+tasks. Placeholder examples inside code fences do not count as unfinished content.
+
+## Add evidence with your contribution
+
+For a behavior change, [add a regression case](/guides/regression-checks) and report
+the commands you ran. For a docs change, include the relevant page and confirm the
+examples against the current implementation. For provider-backed behavior that
+was not exercised, say so explicitly.
