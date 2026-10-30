@@ -73,6 +73,24 @@ Every public `.mdx` page belongs in `docs.json`. Use root-relative site links su
 as `/guides/configuration`. README links at the repository root use real file paths
 so they work on GitHub before hosting exists.
 
+## Agent discovery
+
+Mintlify generates `/llms.txt`, `/llms-full.txt`, and `.md` page exports from the
+site content. We keep these generated so links and page contents follow the
+navigation. SDK guidance in `docs.json` under `markdown.instructions` is included
+in the agent-facing exports. See [Mintlify's export documentation](https://www.mintlify.com/docs/ai/markdown-export).
+
+The checked-in `robots.txt` allows crawling. `seo.metatags.robots` permits page
+indexing. Mintlify generates `/sitemap.xml`; after confirming the public domain,
+add its absolute URL as a `Sitemap:` directive to `robots.txt`.
+
+After deployment, verify `/robots.txt`, `/sitemap.xml`, `/llms.txt`,
+`/llms-full.txt`, and `/getting-started.md` on the actual docs domain. Confirm that
+the index covers all navigation pages and that Markdown exports include the SDK
+guidance. These generated routes return 404 in the local preview used here.
+The dashboard's **Don't index project** setting must be off for public discovery.
+Discovery files help tools find content; they do not guarantee indexing or citation.
+
 ## Screenshot provenance
 
 All four images were copied unchanged from `ui/public/`; no screenshots were generated.
@@ -169,6 +187,7 @@ docs/
   .mintignore
   README.md
   docs.json
+  robots.txt
   index.mdx
   getting-started.mdx
   how-it-works.mdx

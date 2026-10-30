@@ -3,6 +3,20 @@
   "theme": "mint",
   "name": "LoopGuard",
   "description": "Detect stuck AI agents without treating every retry as a loop.",
+  "markdown": {
+    "instructions": [
+      "LoopGuard is a Python runtime guardrail SDK. Install loopguard-runtime and import loopguard. Use /getting-started and /guides/integration for application code.",
+      "The exact, semantic, calc, and trap UI examples illustrate Python SDK detection behavior. Read /demo/scenarios for runnable SDK equivalents. The demo backend calls stream_run; LoopGuard.stream wraps the same runner.",
+      "These docs follow the checkout. PyPI 0.2.1 lacks Gemini support, controlled demo scenarios, and additional decision display fields; check /development/status before describing release capabilities.",
+      "Repetition alone does not force STOP. REPLAN and PAUSE are recorded recommendations. Observe-only mode records decisions without raising. Follow /guides/integration for interrupt propagation.",
+      "Use the Python API, CLI, and configuration references for supported names and flags. Screenshots illustrate observed runs, not guaranteed stop counts or benchmark results."
+    ]
+  },
+  "seo": {
+    "metatags": {
+      "robots": "index, follow"
+    }
+  },
   "colors": {
     "primary": "#0369A1",
     "light": "#38BDF8",
