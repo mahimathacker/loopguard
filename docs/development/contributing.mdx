@@ -92,8 +92,7 @@ still decides whether the documentation is correct. There is no automated rewrit
 ## Investigate a weekly external-link failure
 
 The schedule is Monday at 08:47 Asia/Kolkata (03:17 UTC), subject to GitHub's
-scheduler delays. Scheduled runs use the workflow on the default branch, so the
-schedule starts after these changes are merged there.
+scheduler delays. Scheduled runs use the workflow on the default branch.
 
 Open the failed workflow's job summary and inspect each URL. A 404 may need a new
 destination. A 403, rate limit, or timeout can mean the remote site blocked or
