@@ -57,6 +57,14 @@ The repository has three workflows:
 Making a failing check block merges requires the repository's branch protection
 or ruleset to require that check. The workflow files do not change those settings.
 
+<Note>
+**Diagram draft D07: Documentation maintenance in CI.** Use one lane for PRs:
+Python tests, docs/example validation, Mintlify build, and internal links, with
+drift warnings alongside them. Use a separate weekly/manual lane for external
+links. Mark drift as advisory and merge blocking as dependent on required-check
+settings. Neither lane rewrites documentation or opens a docs-review PR.
+</Note>
+
 ## What the offline checker covers
 
 `scripts/check_docs.py` checks that navigation targets exist, public pages appear

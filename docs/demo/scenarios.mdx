@@ -22,6 +22,14 @@ used by the demo backend. `get_scenario()` supplies this repository's demo agent
 detectors, and initial input. In your application, pass your own agent and input
 or use the [callback integration](/guides/integration).
 
+<Note>
+**Diagram draft D05: Python SDK and demo UI share a runner.** Show a Python
+application calling `LoopGuard.stream()`, which wraps `stream_run()`. Show the
+CLI and demo backend calling that runner directly, with the backend sending
+messages over WebSocket to the UI graph and log. Label the shared event, signal,
+and decision messages so the UI examples connect to the SDK output.
+</Note>
+
 Run these snippets from the source checkout after
 [installing the demo dependencies](/demo/running-locally#set-up-the-checkout).
 They load the root `.env` just like the demo entry points. The `exact` example needs
