@@ -136,37 +136,6 @@ tools cannot fetch `localhost`. See
 [Mintlify's contextual menu documentation](https://www.mintlify.com/docs/ai/contextual-menu)
 for the supported actions.
 
-## Diagram review and Figma handoff
-
-Eight proposed figures are marked with **Diagram draft D01-D08** callouts on the
-relevant pages. These are text briefs for reviewing content and placement; no new
-drawings, Figma files, or image assets have been created. Keep, combine, or remove
-the proposals during the full documentation review before making final figures.
-
-| Draft | Page | Figure to review |
-| --- | --- | --- |
-| D01 | [AI agents and loops](concepts/agents-and-loops.mdx#repetition-can-be-useful) | Useful polling beside repeated empty results, including policy context. |
-| D02 | [Tests, traces, and evals](concepts/tests-traces-and-evals.mdx#choose-an-evaluator-for-the-question) | One recorded run feeding separate task/answer and run-behavior checks. |
-| D03 | [SDK integration](guides/integration.mdx#let-the-interrupt-reach-your-application) | Tool callbacks, policy, observe-only behavior, and interrupt propagation. |
-| D04 | [Saved traces](guides/saved-traces.mdx#fail-a-script-or-ci-check) | Offline replay, reports, failure rules, budgets, and CLI exit codes. |
-| D05 | [Demo scenarios](demo/scenarios.mdx#run-the-visual-examples-through-the-sdk) | Python SDK, CLI, backend, and UI paths through the shared stream runner. |
-| D06 | [Evaluation](development/evaluation.mdx#run-the-detector-evaluation) | The exact detector's six-case confusion matrix, with its limits. |
-| D07 | [Docs maintenance](development/contributing.mdx#keeping-the-docs-accurate) | PR checks and advisory drift review, alongside weekly external-link checks. |
-| D08 | [Regression checks](guides/regression-checks.mdx#use-check-mode-for-a-different-question) | Expected-decision regression tests versus trace collection failure gates. |
-
-Three existing Mermaid figures remain available as references:
-
-- [The normal agent loop](concepts/agents-and-loops.mdx#the-normal-agent-loop).
-- [The runtime event-to-policy pipeline](how-it-works.mdx).
-- [The experiment and regression cycle](concepts/trajectory-and-convergence.mdx#treat-changes-as-experiments).
-
-For each approved figure, use its brief as the Figma handoff, export an asset into
-`docs/images/diagrams/`, and replace the corresponding draft callout with the image
-and descriptive alt text. Preserve the stated SDK behavior and limitations. Remove
-unused draft callouts and keep this index aligned with the approved figures.
-Review these editorial drafts manually before final publication; the current
-release placeholder check covers the separately tracked screenshot placeholders.
-
 ## Screenshot provenance
 
 All four images were copied unchanged from `ui/public/`; no screenshots were generated.
@@ -231,8 +200,6 @@ avoid clipping the later success out of the recovery capture.
 - The published 0.2.1 wheel was inspected: Gemini support, controlled demo scenarios,
   and additional serialized decision display fields require the source checkout.
 - Add the two captures and verify local search after Mintlify login if needed.
-- Review D01-D08, remove unused proposals, and replace approved diagram briefs
-  with the final figures after the content review.
 - If the hosted domain changes, update the README Docs button and hosted link,
   the canonical URL in `docs.json`, and the sitemap URL in `robots.txt` together.
 

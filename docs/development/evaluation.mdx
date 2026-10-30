@@ -82,14 +82,6 @@ two true positives, zero false positives, one false negative, and three true
 negatives. The missed case is a paraphrase loop, which exact signatures don't catch.
 These are small fixture results, not production benchmarks or whole-policy accuracy.
 
-<Note>
-**Diagram draft D06: Exact-detector fixture confusion matrix.** Compare the
-fixture's loop/healthy labels with whether detector evidence fires. Use two true
-positives, zero false positives, one false negative, and three true negatives.
-Label the missed case as a paraphrase loop and keep the caption explicit: six
-fixture cases, detector evidence only, not runtime `STOP` accuracy.
-</Note>
-
 The printed convergence examples use fixed step-count lists. They illustrate a
 scoring function; the command does not measure real agent latency or token savings.
 

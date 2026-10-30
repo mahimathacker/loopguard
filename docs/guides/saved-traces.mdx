@@ -51,14 +51,6 @@ contains a run where the policy reaches `STOP`.
 | `1` | A failure rule matched or a budget was exceeded. |
 | `2` | Argument, file, JSON, or config error. |
 
-<Note>
-**Diagram draft D04: Saved trace to report or CI result.** Follow exported JSON
-through the adapter, offline detectors and policy, and report. Split the output
-into `ingest` analysis and `check` failure rules/budgets. Mark check exit codes
-`0` for no matched failure, `1` for a matched failure, and `2` for input/config
-errors. Replay includes the full trace and does not call the original agent or tools.
-</Note>
-
 To fail on warnings as well as stops:
 
 ```bash

@@ -61,14 +61,6 @@ Some useful work also returns an unchanged status for a while. Progress detectio
 needs settings that reflect how the application behaves, not just a universal
 repeat limit.
 
-<Note>
-**Diagram draft D01: Useful repetition and stuck repetition.** Compare healthy
-polling (`pending`, `processing`, `completed`) with repeated searches returning
-the same empty result. Show actions and results in both lanes, with LoopGuard's
-policy combining evidence before recommending a stop. Avoid implying that a fixed
-number of repeated calls always means a loop.
-</Note>
-
 ## When the loop becomes a problem
 
 A run becomes suspicious when repeated activity no longer produces useful evidence

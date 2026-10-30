@@ -101,14 +101,6 @@ Keep the two checks distinct:
 | Did each labeled example produce the expected policy decision? | The fixture's unit test. |
 | Does this trace collection contain a stop, warning, or exceeded budget that should fail CI? | `python -m loopguard.check` with the chosen rules. |
 
-<Note>
-**Diagram draft D08: Regression expectations and trace gates.** Branch one labeled
-fixture into two questions. The regression test compares replayed decisions with
-`expected_decision`; an expected `STOP` can pass. Check mode applies selected
-failure rules and budgets; that same stuck run normally returns exit code `1`.
-Keep fixture labels outside the analyzer's decision-making path.
-</Note>
-
 [Saved-trace flags and exit codes](/guides/saved-traces) explain how to select those
 failure rules. [Contributing and maintenance](/development/contributing) explains
 how the repository runs its checks on pull requests.
