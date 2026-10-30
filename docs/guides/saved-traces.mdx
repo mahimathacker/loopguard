@@ -1,0 +1,164 @@
+---
+title: Analyze saved traces
+description: Replay an exported run locally and use check mode for script or CI pass/fail behavior.
+---
+
+You can inspect a saved trace without access to the original agent, model, or
+tools. The analyzer reads JSON, maps each exported step into observations, and
+runs the offline detectors. It does not rerun the agent.
+
+## Inspect the included traces
+
+From a repository checkout with LoopGuard installed:
+
+```bash
+python -m loopguard.ingest examples/sample_trace.json
+```
+
+The sample has three runs: one looping, one stalled/warned, and one clean. Its
+summary ends with:
+
+```text
+Summary:
+  3 run(s) analyzed
+  1 clean
+  1 looping
+  1 stalled/warned
+  2 run(s) had alerts
+```
+
+Use JSON when another program needs the results:
+
+```bash
+python -m loopguard.ingest examples/sample_trace.json --json
+```
+
+`ingest` exits successfully after analysis even when it finds a loop. Use `check`
+when detection should affect the process exit code.
+
+## Fail a script or CI check
+
+```bash
+python -m loopguard.check examples/sample_trace.json
+```
+
+The default failure rule is `looping`. This sample exits with code `1` because it
+contains a run where the policy reaches `STOP`.
+
+| Exit code | Meaning for `check` |
+| --- | --- |
+| `0` | No selected failure rule or budget violation matched. |
+| `1` | A failure rule matched or a budget was exceeded. |
+| `2` | Argument, file, JSON, or config error. |
+
+To fail on warnings as well as stops:
+
+```bash
+python -m loopguard.check examples/sample_trace.json --fail-on looping --fail-on stalled
+```
+
+`--fail-on stalled` by itself checks only stalled status; it replaces the default
+`looping` rule. `--fail-on alerts` fails when a run has any recorded alert.
+
+## Add per-run budgets
+
+```bash
+python -m loopguard.check examples/sample_trace.json --max-steps 3 --max-tool-calls 2
+```
+
+Budgets fail independently of the selected statuses and trigger only when a count
+is greater than the maximum. For saved traces, `max_steps` counts exported steps.
+One step containing both a call and a result becomes two internal events.
+
+## Keep check settings in a file
+
+Save this as `loopguard.yml`:
+
+```yaml
+check:
+  fail_on:
+    - looping
+    - stalled
+  max_steps: 40
+  max_tool_calls: 15
+```
+
+```bash
+python -m loopguard.check examples/sample_trace.json --config loopguard.yml
+```
+
+Command-line values override the file. These check settings control failure rules
+and budgets; they do not configure live detectors or turn on semantic detection.
+
+## Analyze more than one file
+
+```bash
+python -m loopguard.check examples/sample_trace.json examples/v02_labeled_traces.json --json
+```
+
+The JSON report includes aggregate counts, matched failure rules, budget violations,
+and per-source reports. Redirect it to a file if your CI needs an artifact:
+
+```bash
+python -m loopguard.check examples/sample_trace.json --json > loopguard-report.json
+```
+
+The exit code is still `1` for this sample; JSON output does not disable failure.
+
+## Trace shape
+
+A file can contain one run object or a list of run objects. Each run has a `steps`
+list; `run_id` is optional and defaults to `unknown`.
+
+```json
+{
+  "run_id": "account-search",
+  "steps": [
+    {
+      "agent": "researcher",
+      "caller": "planner",
+      "tool": "search",
+      "args": { "query": "account status" },
+      "output": "no results"
+    }
+  ]
+}
+```
+
+This one-step example is too short to establish a loop. Add the rest of the run
+when exporting a real trace.
+
+The adapter accepts several common names for each field. It uses the first
+present, non-null value in the order shown:
+
+| Meaning | Accepted fields, in priority order |
+| --- | --- |
+| Tool | `tool`, `tool_name`, `name`, `function` |
+| Arguments | `args`, `arguments`, `input`, `parameters`, `params` |
+| Result | `output`, `result`, `observation`, `response`, `content` |
+| Acting agent/node | `agent`, `node`, `actor`, `role` |
+| Caller | `caller`, `parent`, `parent_agent`, `invoked_by` |
+
+Non-object arguments become a `value` entry. Result text is flattened and truncated
+to 160 characters before comparison. Supply `caller` together with the acting
+agent name to preserve handoff information. No `step` index is required; list order
+determines replay order.
+
+## Interpret the status
+
+- `looping`: a policy decision reached `STOP` anywhere in the replay, including
+  permanent failures or handoff loops.
+- `stalled`: no `STOP`, but the final decision is something other than `continue`.
+- `clean`: neither condition matched.
+
+Earlier alerts can remain even when the final status is `clean`. The analyzer
+replays the full export after a stop decision, so `final_decision` can differ from
+the earlier stop. Check `status` and alert history together.
+
+Both CLIs use offline detectors by default. For custom or semantic detectors, use
+the [Python analysis functions](/reference/python#saved-trace-functions).
+
+[CLI reference](/reference/cli) · [Configuration reference](/reference/configuration)
+
+To preserve expected healthy and stuck behavior across changes,
+[add a trace regression check](/guides/regression-checks).

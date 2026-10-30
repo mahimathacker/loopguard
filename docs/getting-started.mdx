@@ -1,0 +1,112 @@
+---
+title: Getting started
+description: See LoopGuard catch repeated empty results, then attach it to your own agent.
+---
+
+You need Python 3.11+ and pip in your existing Python project.
+
+## Install the package
+
+```bash
+pip install loopguard-runtime
+```
+
+The **PyPI package** is `loopguard-runtime`. The **Python import** is `loopguard`.
+The core package has no required third-party dependencies or API key requirement.
+
+For the working tool example below, install the framework extra if your project
+doesn't already include LangChain/LangGraph:
+
+```bash
+pip install "loopguard-runtime[langgraph]"
+```
+
+## Catch a stuck tool loop
+
+Save this as `first_run.py`. It uses a real LangChain tool with scripted output,
+so you can exercise the callback path without calling a model or external service.
+
+```python
+from langchain_core.tools import tool
+from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
+
+@tool
+def search(query: str) -> str:
+    """Search for a source; this example always returns no results."""
+    return "no results"
+
+handler = LoopGuardCallbackHandler()
+handler.raise_error = True
+
+try:
+    for _ in range(3):
+        search.invoke({"query": "pricing page"}, config={"callbacks": [handler]})
+except LoopGuardInterrupt as exc:
+    print("LoopGuard stopped the run:", exc)
+
+report = handler.report()
+print("Decision:", report["decisions"][-1]["action"])
+print("Tool calls:", report["metrics"]["tool_calls"])
+```
+
+Run it:
+
+```bash
+python first_run.py
+```
+
+The final summary shows:
+
+```text
+Decision: stop
+Tool calls: 3
+```
+
+LangChain may also log the callback exception. The caught `LoopGuardInterrupt` is
+the expected result: three identical calls returned no useful new information.
+The exception's wording differs between the published release and the checkout.
+The same example is saved in the repository as `examples/first_run.py`.
+
+<Note>
+`raise_error = True` is a LangChain callback setting. It lets the callback's
+exception propagate. If your agent catches tool exceptions and turns them into
+tool results, you must also let `LoopGuardInterrupt` escape that error handler.
+See [integration details](/guides/integration#let-the-interrupt-reach-your-application).
+</Note>
+
+## Observe without interrupting
+
+Replace the handler construction above with:
+
+```python
+handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
+```
+
+All three calls finish. LoopGuard still records the signals and the `stop`
+decision. This is useful when checking thresholds against your application's
+normal retries before enabling interruption.
+
+<Note>
+In the callback report, `interrupted: true` means the policy reached `STOP` at
+some point. It does not prove the framework actually stopped. This flag is also
+true in observe-only mode when the policy recommends stopping.
+</Note>
+
+## Read the report
+
+| Entry | What it tells you |
+| --- | --- |
+| `events` | The recorded tool calls, results, and errors. |
+| `signals` | Detector evidence, including the reason and score. |
+| `decisions` | Policy actions and the evidence used to choose them. |
+| `metrics` | Counts such as recorded steps, tool calls, and repeat rate. |
+
+The report also includes `alerts` for compatibility. For new integrations, start
+with `signals` and `decisions`.
+
+## Next steps
+
+- [Add LoopGuard to a LangGraph/LangChain run](/guides/integration).
+- [Understand detection](/how-it-works).
+- [Tune configuration](/guides/configuration).
+- [Analyze saved traces](/guides/saved-traces).

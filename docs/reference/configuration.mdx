@@ -1,0 +1,82 @@
+---
+title: Configuration reference
+description: Supported file settings, defaults, and provider environment variables.
+---
+
+These fields come from the current `configured_detectors`, callback, wrapper, and
+check config loaders. Unrecognized keys are not rejected reliably; a misspelling
+can silently leave the default in effect.
+
+Gemini-related providers, variables, and dependencies below describe the source
+checkout. The published `0.2.1` wheel uses OpenAI embeddings and does not include
+the Gemini provider implementation.
+
+## Live settings
+
+Place these under `live` in `loopguard.yml`, or at the top level of a live-only file.
+These defaults describe `LoopGuardCallbackHandler()` and `LoopGuard()`; demo scenarios
+select their own detector lists and thresholds.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `max_steps` | Unset | Recorded event limit; fires after the maximum is exceeded. |
+| `max_tool_calls` | Unset | Tool-call limit; fires after the maximum is exceeded. |
+| `exact_threshold` | `3` | Matching normalized calls required. |
+| `exact_window` | `12` | Recent event window for exact repetition. |
+| `exact_fatal` | `true` | Evidence hint; repetition alone still cannot force `STOP`. |
+| `stall_patience` | `4` | Identical consecutive result signatures for `StallDetector`. |
+| `stall_fatal` | `false` | Evidence hint for stagnant-result findings. |
+| `handoff_repeats` | `2` | Consecutive repetitions of a closed handoff cycle. |
+| `handoff_window` | `16` | Recent event window for handoff edges. |
+| `handoff_max_cycle_length` | `5` | Maximum handoff edges per cycle. |
+| `handoff_fatal` | `true` | Evidence hint; handoff-loop evidence can still stop when false. |
+| `semantic` | `false` | Add embedding-backed semantic detection. |
+| `semantic_threshold` | `0.8` | Cosine similarity threshold; use a meaningful value up to `1`. |
+| `semantic_window` | `6` | Recent event window for semantic comparisons. |
+| `semantic_min_repeats` | `3` | Similar calls required, including the current call. |
+| `semantic_fatal` | `true` | Evidence hint; semantic repetition alone does not force `STOP`. |
+
+Windows count **events**, not only tool calls. Calls and results can each consume
+an event. The loader validates positive numbers but does not check every meaningful
+relationship between settings, such as whether enough calls can fit in a window.
+
+`ProgressDetector.patience`, `RepeatedFailureDetector.attempts`, action-cycle
+parameters, `interrupt_on_fatal`, `recursion_limit`, and policy thresholds are not
+file settings accepted by these live loaders. Use Python APIs where exposed.
+
+## Saved-trace check settings
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `fail_on` | `looping` | A string or list containing `looping`, `stalled`, or `alerts`. |
+| `max_steps` | Unset | Maximum exported steps per run. |
+| `max_tool_calls` | Unset | Maximum normalized tool-call observations per run. |
+
+Place these under `check`, or use top-level keys for a check-only file. JSON config
+can also supply limits through a `budgets` mapping; direct limit fields take priority.
+Prefer the flat fields in YAML because the YAML parser only supports shallow mappings.
+
+Check mode does not load the `live` detector settings or enable semantic detection
+from this file. It analyzes with the offline default detector list, then applies
+failure rules and budgets to the reports. An empty `fail_on` list falls back to
+`looping`; it does not disable all status checks.
+
+## Environment variables
+
+| Variable | Used by | Default or accepted values |
+| --- | --- | --- |
+| `LOOPGUARD_EMBEDDING_PROVIDER` | Default semantic embedder | `openai` or `gemini`; defaults to `openai`. |
+| `OPENAI_API_KEY` | OpenAI embeddings and demo chat model | Required for the OpenAI paths. |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini embeddings and demo chat model | One key is required for the Gemini paths. |
+| `LOOPGUARD_MODEL_PROVIDER` | Demo chat model | `openai` or `gemini`; defaults to `openai`. |
+| `LOOPGUARD_OPENAI_MODEL` | OpenAI demo chat model | Source default: `gpt-4o-mini`. |
+| `LOOPGUARD_GEMINI_MODEL` | Gemini demo chat model | Source default: `gemini-3.6-flash`. |
+| `NEXT_PUBLIC_LOOPGUARD_API` | Next.js demo UI | Defaults to `http://localhost:8000`. |
+
+Model names above are implementation defaults, not a promise that your provider
+account has access. Embedding models are constructor arguments, not environment
+settings. Set both provider selectors explicitly when using Gemini: the library's
+embedding selector defaults independently to OpenAI.
+
+For runnable examples, see [configuration](/guides/configuration) and
+[the local demo](/demo/running-locally).

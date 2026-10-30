@@ -1,0 +1,155 @@
+---
+title: Run the demo UI
+description: Start the local backend and frontend, then compare healthy and stuck runs.
+---
+
+The demo runs on your machine: a FastAPI backend streams events over WebSocket,
+and a Next.js frontend displays the graph, decisions, event log, and metrics.
+Start with `exact`; it needs no provider credentials.
+
+## Set up the checkout
+
+You need Python 3.11+, pip, Git, and Node.js with npm. The UI uses Next.js 16;
+use a supported Node.js version for that release.
+
+```bash
+git clone https://github.com/mahimathacker/loopguard.git
+cd loopguard
+python -m venv .venv
+```
+
+Activate the environment:
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    source .venv/bin/activate
+    ```
+  </Tab>
+  <Tab title="PowerShell">
+    ```powershell
+    .\.venv\Scripts\Activate.ps1
+    ```
+  </Tab>
+</Tabs>
+
+Install the source checkout and demo dependencies:
+
+```bash
+pip install -e ".[demo,server]"
+```
+
+The base PyPI install doesn't include the backend, model SDKs, or frontend.
+`requirements.txt` is another supported source-demo installation path.
+
+## Choose an offline or provider-backed run
+
+For `exact`, leave credentials unset. For other scenarios, create a root `.env`
+file using `.env.example` as a starting point:
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    cp .env.example .env
+    ```
+  </Tab>
+  <Tab title="PowerShell">
+    ```powershell
+    Copy-Item .env.example .env
+    ```
+  </Tab>
+</Tabs>
+
+Choose a provider configuration in `.env`:
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```dotenv
+    OPENAI_API_KEY=your-key
+    LOOPGUARD_MODEL_PROVIDER=openai
+    LOOPGUARD_EMBEDDING_PROVIDER=openai
+    ```
+
+    The demo chat-model default is `gpt-4o-mini`.
+    `LOOPGUARD_OPENAI_MODEL` overrides it.
+  </Tab>
+  <Tab title="Gemini">
+    ```dotenv
+    GOOGLE_API_KEY=your-key
+    LOOPGUARD_MODEL_PROVIDER=gemini
+    LOOPGUARD_EMBEDDING_PROVIDER=gemini
+    ```
+
+    `GEMINI_API_KEY` is also accepted. The source chat-model default is
+    `gemini-3.6-flash`; `LOOPGUARD_GEMINI_MODEL` overrides it. Confirm that the
+    configured model and the embedding model are available to your account.
+  </Tab>
+</Tabs>
+
+Set both provider selectors explicitly. The embedding library defaults independently
+to OpenAI, even if the chat-model selector is Gemini. Restart the backend after
+editing `.env`; existing process environment values take precedence over the file.
+
+<Note>
+`semantic` needs embeddings but no chat model. `controlled_progress`,
+`controlled_503`, and `controlled_401` need a chat model but no embeddings.
+`controlled_empty`, `calc`, and `trap` need both. Provider-backed runs may incur
+API charges; the `trap` scenario also performs real web searches.
+</Note>
+
+## Start the backend
+
+In a terminal at the repository root with the Python environment active:
+
+```bash
+uvicorn server:app --reload --port 8000
+```
+
+Check `http://localhost:8000/runtime` to see the selected providers and chat model.
+This endpoint does not test credentials or model access.
+
+## Start the frontend
+
+In a second terminal at the repository root:
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Choose **Scripted: identical
+tool loop**, then select **Run**. Watch repeated empty results build evidence until
+the run stops.
+
+<Frame caption="Existing demo capture: the graph, event log, and metrics let you inspect a stuck run together.">
+  <img src="/images/exact-loop.png" alt="LoopGuard demo main interface with an agent-tool graph, repeated tool observations, and metrics" />
+</Frame>
+
+This capture predates the current decision panel. Fresh capture instructions
+are in the repository's `docs/README.md` maintainer checklist.
+
+## Change the backend address
+
+The frontend defaults to `http://localhost:8000` and derives the WebSocket address
+from it. To use a different backend, set `NEXT_PUBLIC_LOOPGUARD_API` in
+`ui/.env.local`, then restart the frontend:
+
+```dotenv
+NEXT_PUBLIC_LOOPGUARD_API=http://localhost:8000
+```
+
+The browser must be able to reach that address. See
+[connection troubleshooting](/troubleshooting#ui-cannot-connect-to-the-backend).
+
+## Use the terminal instead
+
+With the Python environment active, from the repository root:
+
+```bash
+python main.py exact
+python main.py controlled_503
+```
+
+The backend and browser use the same scenario definitions as this CLI. See
+[demo scenarios](/demo/scenarios) for expected behavior and provider requirements.

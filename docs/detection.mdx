@@ -1,0 +1,167 @@
+---
+title: Detecting stuck agents
+description: Recognize repeated actions, stagnant results, failures, cycles, and exceeded budgets.
+---
+
+A detector reports evidence. The policy decides what to do with it. The examples
+below describe the default behavior; application settings and recent signals can
+change the final decision.
+
+New to the agent execution cycle? [AI agents and loops](/concepts/agents-and-loops)
+explains why repeated activity can be healthy and when it becomes suspicious.
+
+## Exact repeated tool calls
+
+```text
+search(query="pricing")
+search(query="pricing")
+search(query="pricing")
+```
+
+**Why it matters:** repeated calls can spend time without finding anything new.
+The same pattern can also be healthy polling, so the calls alone aren't enough.
+
+**What LoopGuard looks for:** `LoopDetector` counts a normalized tool signature
+inside a recent event window. Argument keys are sorted; their string values are
+trimmed and lowercased. This is exact normalized matching, not fuzzy matching.
+Defaults are three matching calls within 12 recorded events.
+
+**Possible decision:** repetition alone normally produces `warn`. Repetition
+combined with no-progress evidence can produce `stop`.
+
+## Semantic repetition
+
+```text
+search("weather in Paris")
+search("Paris weather today")
+search("current weather in Paris")
+```
+
+**Why it matters:** changing the wording can hide the same unsuccessful approach.
+
+**What LoopGuard looks for:** `SemanticLoopDetector` embeds tool argument values
+and compares cosine similarity with recent tool decisions. If arguments are absent,
+it uses the event's action text. Defaults are similarity `0.8`, a six-event window,
+and three similar calls including the current call.
+
+**Possible decision:** semantic repetition alone can recommend `replan`; with
+no-progress evidence it can reach `stop`.
+
+<Note>
+Semantic detection is opt-in for the default live integration. Install the semantic
+extra and configure an OpenAI or Gemini embedding provider. The demo scenarios use
+their own detector choices. See [semantic setup](/guides/configuration#enable-semantic-detection).
+</Note>
+
+## Stalled or empty results
+
+```text
+query users  -> empty
+query orders -> empty
+query logs   -> empty
+```
+
+**Why it matters:** the agent can change tools or arguments and still learn nothing.
+
+**What LoopGuard looks for:** `StallDetector` checks for identical consecutive
+result signatures, with patience four by default. `ProgressDetector` uses a default
+three-result tail and checks identical outputs or an empty/error-like current result.
+These are text heuristics; they do not understand your application's completion criteria.
+
+**Possible decision:** no progress alone normally recommends `replan`. Add repeated
+tool calls, semantic repetition, or a repeating action cycle and the policy can stop.
+
+## Repeated failures
+
+```text
+fetch account -> 401 unauthorized
+fetch account -> 401 unauthorized
+```
+
+Compare that with:
+
+```text
+fetch status -> 503 temporarily unavailable
+fetch status -> 503 temporarily unavailable
+fetch status -> success
+```
+
+**Why it matters:** a temporary outage may recover after a retry. Repeating an
+authentication failure usually needs a changed credential or human action.
+
+**What LoopGuard looks for:** `RepeatedFailureDetector` classifies result text.
+Tokens such as `401`, `403`, `auth`, `permission`, `invalid`, and `schema` suggest
+permanent failure. Tokens such as `429`, `timeout`, `temporarily`, and `unavailable`
+suggest a retryable failure. The detector counts occurrences of the exact result
+signature across the run, with a default threshold of two; they need not be consecutive.
+
+**Possible decision:** permanent failure evidence reaches `stop`. Retryable failure
+evidence alone stays below `stop`, allowing recovery. Long retries can still combine
+with repetition and no-progress evidence to stop.
+
+This is not HTTP exception inspection. A bare status code `503` is not a special
+case; the demo's `temporarily unavailable` text makes that result retryable.
+
+## Repeating action cycles
+
+```text
+search -> summarize -> search -> summarize
+result -> no results each time
+```
+
+**Why it matters:** an agent may alternate between actions rather than repeat one
+identical call.
+
+**What LoopGuard looks for:** `CycleDetector` checks consecutive repeating sequences
+of tool/handoff signatures with more than one distinct action. Defaults allow cycles
+up to four actions long and require two cycles.
+
+**Possible decision:** a cycle alone normally recommends `replan`. With no-progress
+evidence, it can reach `stop`.
+
+## Multi-agent handoff loops
+
+```text
+planner -> researcher -> reviewer -> planner
+planner -> researcher -> reviewer -> planner
+```
+
+**Why it matters:** each agent can look active while the system keeps passing the
+same work around.
+
+**What LoopGuard looks for:** `HandoffLoopDetector` reads the optional `caller`
+payload and the event's node. It checks repeated closed cycles of directed handoffs.
+Defaults are two repeats within 16 events, with cycle length at most five.
+
+**Possible decision:** a repeated closed handoff cycle reaches `stop` with the
+default policy. Repeated one-way handoffs do not count as closed cycles.
+
+Saved traces can supply agent names and caller fields directly. Live callbacks use
+fixed `agent`/`tools` node names, so attaching a callback does not automatically
+reconstruct an arbitrary multi-agent topology. See [trace fields](/guides/saved-traces#trace-shape).
+
+## Step and tool-call budgets
+
+```text
+max_tool_calls: 15
+16th recorded tool call -> stop
+```
+
+**Why it matters:** a run may spend too much work even when no loop pattern fires.
+
+**What LoopGuard looks for:** `StepBudgetDetector` counts recorded events;
+`ToolCallBudgetDetector` counts tool-call events. Neither limit is enabled by
+default. Both fire when the count is **greater than** the configured maximum.
+
+**Possible decision:** an exceeded live budget reaches `stop`. In saved-trace check
+mode, budget violations independently make the check fail. A saved-trace step is an
+exported step, which can map to two internal events.
+
+## Choose settings with real traces
+
+Use [observe-only mode](/guides/integration#observe-first) while collecting examples
+of healthy polling, retries, and failures. Tune against those examples rather than
+assuming one threshold is right for every application.
+
+[Configure LoopGuard](/guides/configuration) or compare the
+[demo scenarios](/demo/scenarios).

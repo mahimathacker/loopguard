@@ -1,261 +1,170 @@
-# LoopGuard guides
+# Maintaining the LoopGuard docs
 
-[Back to the README](../README.md)
+The Mintlify site lives in this directory. Start reading at [Introduction](index.mdx).
+This file is a maintainer handoff, not a published docs page; `.mintignore` excludes it.
 
-Detailed setup and reference material lives here until the Mintlify documentation is published.
-Run repository commands from the project root unless a step says otherwise.
+## Preview
 
-- [Installation](#installation)
-- [Live integration and reports](#live-integration-and-reports)
-- [Architecture and detectors](#architecture-and-detectors)
-- [Saved trace analysis](#saved-trace-analysis)
-- [Configuration](#configuration)
-- [Running the demo](#running-the-demo)
-- [Evaluation and tests](#evaluation-and-tests)
-- [Roadmap](#roadmap)
-- [Project structure](#project-structure)
-
-## Installation
-
-Requires Python 3.11+ and pip. The core package has no required third-party dependencies;
-install the optional extras below for framework integration, semantic detection, or demos.
-
-LoopGuard is published on PyPI as `loopguard-runtime`:
+Use Node.js 20.17+ and run the current official `mint` CLI from `docs/`:
 
 ```bash
-pip install loopguard-runtime
+cd docs
+npx --yes mint dev --port 3001 --no-open
 ```
 
-Or pin the current release:
+Open http://localhost:3001. Port 3001 leaves port 3000 free for the LoopGuard demo UI.
+The preview stays local. Mintlify may require a login to activate local search;
+reading the preview does not require deploying it.
+
+## Validate
+
+From `docs/`:
 
 ```bash
-pip install loopguard-runtime==0.2.1
+npx --yes mint validate
+npx --yes mint broken-links --check-anchors
+npx --yes mint a11y
 ```
 
-The package name is `loopguard-runtime`, but the Python import is `loopguard`:
+Use the `mint` package, not the legacy `mintlify` npm package. The CLI follows
+[Mintlify's current command reference](https://www.mintlify.com/docs/cli/commands).
+Its generated cache and installed tooling are not source files to commit.
 
-```python
-from loopguard import LoopGuardCallbackHandler
-```
-
-For LangGraph/LangChain callback dependencies:
+From the repository root, also run:
 
 ```bash
-pip install "loopguard-runtime[langgraph]"
+python -m unittest discover -v
+python scripts/check_docs.py
+python scripts/verify_doc_examples.py
+python examples/first_run.py
+python -m loopguard.ingest examples/sample_trace.json --json
+python -m loopguard.check examples/sample_trace.json --json
 ```
 
-For the full demo stack from GitHub source:
+Install the framework extra to run `first_run.py`. The sample trace check should
+exit `1`; it deliberately contains a loop. Provider-backed scenarios need separate
+credentials and model access. Do not interpret offline fixture scores as production
+accuracy.
 
-```bash
-pip install "loopguard-runtime[demo,server] @ git+https://github.com/mahimathacker/loopguard.git"
-```
-
-## Live integration and reports
-
-For an existing LangGraph/LangChain agent (`agent`) and its input (`my_input`), attach the callback handler:
-
-```python
-from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
-
-handler = LoopGuardCallbackHandler()
-
-try:
-    result = agent.invoke(my_input, config={"callbacks": [handler]})
-except LoopGuardInterrupt as exc:
-    print("LoopGuard stopped the run:", exc)
-
-print(handler.report())
-```
-
-The report includes:
-
-- `events`: normalized tool calls and observations
-- `signals`: detector evidence such as repeated calls or no progress
-- `decisions`: policy actions such as continue, warn, replan, pause, or stop
-- `metrics`: step counts, tool calls, repeat rate, and common actions
-- `alerts`: legacy compatibility alerts
-
-`REPLAN` and `PAUSE` are recommendations today. LoopGuard records them in the report;
-automatic interruption happens only when the policy reaches `STOP`.
-
-To observe without stopping the run:
-
-```python
-from loopguard import LoopGuardCallbackHandler
-
-handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
-result = agent.invoke(my_input, config={"callbacks": [handler]})
-
-for decision in handler.report()["decisions"]:
-    print(decision["action"], decision["risk_score"])
-```
-
-## Architecture and detectors
+## Navigation
 
 ```text
-Agent event -> Tracer -> Detectors -> DetectionSignals -> PolicyEngine -> GuardDecision
+Start here
+  Introduction
+  Getting started
+  How LoopGuard works
+Concepts
+  AI agents and loops
+  Tests, traces, and evals
+  Agent trajectories and convergence
+Use LoopGuard
+  Detecting stuck agents
+  LangGraph and LangChain
+  Configure LoopGuard
+  Analyze saved traces
+  Add a trace regression check
+Explore the demo
+  Demo scenarios
+  Run the demo UI
+Test and troubleshoot
+  Evaluation and tests
+  Troubleshooting
+  Project status
+  Contributing and docs maintenance
+Reference
+  Python API
+  CLI reference
+  Configuration reference
 ```
 
-| Part | Job | File |
-|------|-----|------|
-| Tracer | Records each agent event. | `loopguard/tracer.py` |
-| Metrics | Counts steps, tool calls, repeats, and common actions. | `loopguard/metrics.py` |
-| Detectors | Turn events into scored evidence signals. | `loopguard/detectors.py`, `loopguard/signals.py` |
-| Policy | Combines signals into continue/warn/replan/pause/stop decisions. | `loopguard/policy.py`, `loopguard/monitor.py` |
+Every public `.mdx` page belongs in `docs.json`. Use root-relative site links such
+as `/guides/configuration`. README links at the repository root use real file paths
+so they work on GitHub before hosting exists.
 
-Current detectors/signals:
+## Automated maintenance
 
-- `LoopDetector`: repeated normalized tool calls
-- `SemanticLoopDetector`: repeated intent in different words, using embeddings
-- `StallDetector` and `ProgressDetector`: stagnant observations and no progress
-- `RepeatedFailureDetector`: retryable vs likely permanent failures
-- `CycleDetector`: repeating action sequences
-- `HandoffLoopDetector`: closed multi-agent handoff cycles
-- Step/tool-call budget detectors
+See [the contributing guide](development/contributing.mdx) for the CI behavior
+and local equivalents. The three workflows live in `.github/workflows/`:
 
-Detectors do not make the final execution decision alone. Repetition can warn; repetition
-plus stagnant output can stop.
+- `documentation.yml`: tests, offline docs checks, README example execution,
+  Mintlify build, and internal link checks on PRs and pushes.
+- `docs-drift.yml`: a file-based PR warning and summary for developer-facing changes
+  without Markdown updates. It does not rewrite docs or prove coverage.
+- `external-links.yml`: a weekly/manual Lychee check of public documentation URLs.
+  Its schedule takes effect after the workflow reaches the default branch.
 
-## Saved trace analysis
+`python scripts/check_docs.py --release` fails on the current hosted-URL placeholder
+and two screenshot placeholders. Normal checks warn so in-progress docs can be
+reviewed. Version tags and manual release-readiness runs use the strict check.
+These checks do not publish the docs. Require the relevant status checks in branch
+protection if they should block merging.
 
-LoopGuard can analyze exported JSON traces without running the original agent:
+## Agent discovery
 
-```bash
-python -m loopguard.ingest examples/sample_trace.json
-python -m loopguard.ingest examples/sample_trace.json --json
-loopguard-ingest examples/sample_trace.json --json
-```
+Mintlify generates `/llms.txt`, `/llms-full.txt`, and `.md` page exports from the
+site content. We keep these generated so links and page contents follow the
+navigation. SDK guidance in `docs.json` under `markdown.instructions` is included
+in the agent-facing exports. See [Mintlify's export documentation](https://www.mintlify.com/docs/ai/markdown-export).
 
-Use check mode for local scripts or CI-style pass/fail behavior:
+The checked-in `robots.txt` allows crawling. `seo.metatags.robots` permits page
+indexing. Mintlify generates `/sitemap.xml`; after confirming the public domain,
+add its absolute URL as a `Sitemap:` directive to `robots.txt`.
 
-```bash
-python -m loopguard.check examples/sample_trace.json
-python -m loopguard.check examples/sample_trace.json --fail-on stalled
-python -m loopguard.check examples/sample_trace.json --max-steps 20 --max-tool-calls 10
-python -m loopguard.check examples/sample_trace.json --config loopguard.yml
-python -m loopguard.check examples/sample_trace.json --fail-on looping --fail-on stalled --json
-loopguard-check examples/sample_trace.json --json
-```
+After deployment, verify `/robots.txt`, `/sitemap.xml`, `/llms.txt`,
+`/llms-full.txt`, and `/getting-started.md` on the actual docs domain. Confirm that
+the index covers all navigation pages and that Markdown exports include the SDK
+guidance. These generated routes return 404 in the local preview used here.
+The dashboard's **Don't index project** setting must be off for public discovery.
+Discovery files help tools find content; they do not guarantee indexing or citation.
 
-By default, only `looping` fails the check. Use `--fail-on stalled` to fail on no-progress
-warnings too, or `--fail-on alerts` to fail on any alert. Step and tool-call budgets
-always fail the check when exceeded.
+## Ask in ChatGPT or Claude
 
-The trace adapter is forgiving about field names such as `tool`, `tool_name`, `name`,
-`args`, `arguments`, `input`, `output`, `result`, `agent`, and `caller`.
+`docs.json` enables Mintlify's built-in `chatgpt`, `claude`, `copy`, and `view`
+context-menu actions in the page header. The first action is the primary button;
+the others appear in its dropdown. This setup uses external AI tools rather than
+Mintlify's paid embedded assistant. No model key or chat backend is added here.
 
-## Configuration
+These actions provide the current page as context, not an automatically indexed
+copy of every repository file. The introduction explains how to include the
+published `llms.txt` or `llms-full.txt` for broader questions and how to copy a page
+when fetching is unavailable. The user's external AI account and its limits apply.
 
-Keep local/live policy in a small `loopguard.yml`:
+After deployment, check both links on the real docs URL and confirm that the
+provider can retrieve the page. Local preview links can be inspected, but external
+tools cannot fetch `localhost`. See
+[Mintlify's contextual menu documentation](https://www.mintlify.com/docs/ai/contextual-menu)
+for the supported actions.
 
-```yaml
-live:
-  max_steps: 40
-  max_tool_calls: 15
-  exact_threshold: 3
-  exact_window: 12
-  stall_patience: 4
-  stall_fatal: false
-  handoff_repeats: 2
-  handoff_window: 16
-  handoff_max_cycle_length: 5
-  handoff_fatal: true
-  semantic: false
+## Screenshot provenance
 
-check:
-  fail_on:
-    - looping
-    - stalled
-  max_steps: 40
-  max_tool_calls: 15
-```
+All four images were copied unchanged from `ui/public/`; no screenshots were generated.
 
-For check-only config, top-level keys also work:
+| Original | Docs image | Used on |
+| --- | --- | --- |
+| `realagentloop.png` | `images/stuck-agent.png` | Introduction and demo scenarios; the root README uses the original. |
+| `scriptedtool.png` | `images/exact-loop.png` | Exact scenario and local demo setup. |
+| `scriptedopenai.png` | `images/semantic-loop.png` | Semantic scenario. |
+| `realagentmath.png` | `images/healthy-calculation.png` | Healthy calculation scenario. |
 
-```yaml
-fail_on:
-  - looping
-  - stalled
-max_steps: 40
-max_tool_calls: 15
-```
+These captures show an older UI layout. Captions disclose that; they do not claim
+that current thresholds always stop at the counts displayed in those screenshots.
+Each of the four visual scenarios includes a runnable Python SDK example and an
+explanation of the messages behind the UI. The screenshots illustrate SDK behavior;
+the UI is one way to inspect it.
 
-Use config with the callback handler:
+## Screenshot capture checklist
 
-```python
-from loopguard import LoopGuardCallbackHandler
+Two new captures complete the healthy-recovery versus permanent-failure comparison.
+Both placeholders are on `demo/scenarios.mdx`.
 
-handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
-agent.invoke(my_input, config={"callbacks": [handler]})
-```
-
-Set `semantic: true` to enable paraphrase-loop detection with embeddings. That path can
-use OpenAI or Gemini embeddings:
-
-```bash
-LOOPGUARD_EMBEDDING_PROVIDER=openai  # requires OPENAI_API_KEY
-LOOPGUARD_EMBEDDING_PROVIDER=gemini  # requires GOOGLE_API_KEY or GEMINI_API_KEY
-```
-
-## Running the demo
-
-The full local demo requires Python 3.11+, pip, Git, and Node.js with npm.
-Model-backed scenarios also need provider credentials as described below.
-
-[Watch the LoopGuard demo on YouTube](https://youtu.be/i5XRrvFoPA0).
-
-The repo includes a FastAPI/WebSocket backend, a Next.js + React Flow UI, and local demo
-scenarios:
-
-- `exact`: scripted identical tool loop, offline
-- `semantic`: scripted paraphrase loop, requires embeddings
-- `controlled_progress`: real ReAct agent, controlled pending -> processing -> completed tool responses
-- `controlled_503`: real ReAct agent, controlled 503 -> 503 -> success tool responses
-- `controlled_401`: real ReAct agent, controlled repeated auth failure
-- `controlled_empty`: real ReAct agent, controlled no-results loop
-- `calc`: real ReAct agent that finishes
-- `trap`: real ReAct agent given an impossible goal
-
-Screenshots:
-
-![Identical tool loop](../ui/public/scriptedtool.png)
-![Paraphrase loop](../ui/public/scriptedopenai.png)
-![Real agent finishing](../ui/public/realagentmath.png)
-![Real agent caught in a loop](../ui/public/realagentloop.png)
-
-Run the local demo stack:
-
-```bash
-git clone https://github.com/mahimathacker/loopguard.git
-cd loopguard
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-Set one model provider in `.env` for real-agent scenarios:
-
-```bash
-# OpenAI
-OPENAI_API_KEY=sk-...
-LOOPGUARD_MODEL_PROVIDER=openai
-LOOPGUARD_EMBEDDING_PROVIDER=openai
-
-# Gemini
-GOOGLE_API_KEY=...
-LOOPGUARD_MODEL_PROVIDER=gemini
-LOOPGUARD_GEMINI_MODEL=gemini-3.6-flash
-LOOPGUARD_EMBEDDING_PROVIDER=gemini
-```
-
-Terminal 1:
+First follow [local demo setup](demo/running-locally.mdx). With the Python environment
+active, run the backend from the repository root:
 
 ```bash
 uvicorn server:app --reload --port 8000
 ```
 
-Terminal 2:
+In a second terminal, from the repository root:
 
 ```bash
 cd ui
@@ -263,67 +172,133 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Configure one chat provider in the root `.env`. Neither capture needs embeddings.
+Open http://localhost:3000 and use the scenario selector; CLI commands alone do not
+populate the browser UI.
 
-Command-line demos:
+1. **503 recovery:** choose **Controlled ReAct: 503 -> success**, select **Run**,
+   and wait for completion. Capture the scenario name, decision/verdict, graph,
+   and event log containing both `503 temporarily unavailable` results and the
+   later success. Save the real capture as `images/controlled-503-recovery.png`.
+2. **401 failure:** choose **Controlled ReAct: auth failure**, select **Run**,
+   and wait for `STOP`. Capture the selected scenario, first 401 result, stop
+   reason/decision, and red graph together. The demo stops on the first observed
+   permanent failure, so do not force additional failures. Save the real capture
+   as `images/controlled-401-failure.png`.
 
-```bash
-python main.py            # exact, offline
-python main.py semantic   # semantic loop
-python main.py calc       # real agent, finishes
-python main.py trap       # real agent, loops and gets caught
-```
+Replace each visible screenshot placeholder with a `Frame` and an image with clear
+alt text after the file exists. Use a viewport wide enough to show the event log;
+avoid clipping the later success out of the recovery capture.
 
-## Evaluation and tests
+## Items to verify before release
 
-The core test suite is offline and uses fake agents/fake embeddings:
+- Provider model access: defaults come from source; no credential-backed run is
+  implied by the offline checks. Gemini chat and embedding defaults are separate.
+- Your agent's error handling must propagate `LoopGuardInterrupt`; a recorded
+  `STOP` alone does not prove execution stopped.
+- The published 0.2.1 wheel was inspected: Gemini support, controlled demo scenarios,
+  and additional serialized decision display fields require the source checkout.
+- Add the two captures and verify local search after Mintlify login if needed.
+- Replace `[DOCS URL TO ADD AFTER DEPLOYMENT]` in the root README only when a real
+  hosted URL exists; point the Docs button to it at the same time.
 
-```bash
-python -m unittest discover -v
-```
+## Verification completed
 
-The v0.2 fixture in `examples/v02_labeled_traces.json` covers healthy polling,
-pagination, retryable recovery, permanent failures, exact loops, alternating cycles, and
-multi-agent handoff cycles.
+- All 72 runtime and documentation automation tests passed with framework dependencies installed.
+- The first-run example passed against both the source checkout and the actual
+  published 0.2.1 wheel.
+- A real LangGraph `ToolNode` run propagated the stop exception when configured
+  to let tool errors escape.
+- Mintlify full validation/build and internal link checks passed.
+- All 20 pages rendered successfully in Chrome with no broken images. The
+  introduction, getting-started page, demo scenarios, config reference, and all
+  three concept pages, plus the two new practical guides, were checked at a 390px
+  viewport without document overflow.
+- Mintlify found alt text on every image. Brand colors meet the check's AA/minimum
+  contrast thresholds; its optional AAA suggestion remains a warning.
+- Python code blocks parsed, JSON/YAML samples loaded, and nine trace/example
+  command variants returned the expected exit codes.
+- The convergence example printed `0.58`; the equal-score and nonpositive-count
+  limitations described in the concept guide were checked against the helper.
+- The local backend's runtime and graph routes and the exact WebSocket run were
+  checked without making provider calls.
+- Workflow syntax passed actionlint. The external-link checker passed against
+  the actual public links. Strict release checking correctly failed on the three
+  remaining reader-facing publication placeholders.
+- ChatGPT and Claude context-menu actions were checked at desktop and mobile
+  widths, including the generated page URLs and copy/Markdown alternatives.
+  External chat navigation was intercepted during verification; retrieval of a
+  published page still needs a deployment check.
 
-After installing the demo dependencies, the eval harness reports detector precision/recall/F1. With `OPENAI_API_KEY` set, it also runs model-backed comparisons:
+Provider-backed scenarios were inspected in source, not run against paid APIs.
+Local search requires Mintlify login and was not activated.
 
-```bash
-python -m loopguard.evals
-```
-
-## Roadmap
-
-LoopGuard is not trying to become a general tracing, dataset, eval, or monitoring
-platform. The next work is narrow:
-
-- Tune thresholds against real production traces.
-- Add clearer examples for healthy retries, polling, pagination, and cyclic failures.
-- Add GitHub check annotations for saved-trace failures.
-- Explore LangGraph.js/LangChain.js support later.
-
-## Project structure
+## Files in this change
 
 ```text
-loopguard/
-  loopguard/
-    tracer.py         records events
-    metrics.py        derives trace metrics
-    signals.py        DetectionSignal, GuardDecision, GuardAction
-    policy.py         combines signals into runtime decisions
-    detectors.py      loop, progress, failure, cycle, budget, and handoff detectors
-    monitor.py        records events, collects signals, and stores decisions
-    guard.py          public LoopGuard wrapper for live runs
-    langgraph.py      callback handler for LangGraph/LangChain live runs
-    embeddings.py     OpenAI/Gemini embeddings for semantic detection
-    runner.py         stream_run helper
-    ingest.py         offline trace analyzer
-    check.py          saved-trace check command
-    evals.py          detector evaluation harness
-  examples/
-  server.py
-  main.py
-  ui/
-  requirements.txt
-  pyproject.toml
+README.md
+CONTRIBUTING.md
+.lychee.toml
+.github/workflows/
+  documentation.yml
+  docs-drift.yml
+  external-links.yml
+scripts/
+  check_docs.py
+  check_docs_drift.py
+  verify_doc_examples.py
+tests/
+  test_docs_automation.py
+examples/
+  first_run.py
+  langgraph_callback_demo.py
+docs/
+  .mintignore
+  README.md
+  docs.json
+  robots.txt
+  index.mdx
+  getting-started.mdx
+  how-it-works.mdx
+  detection.mdx
+  troubleshooting.mdx
+  concepts/
+    agents-and-loops.mdx
+    tests-traces-and-evals.mdx
+    trajectory-and-convergence.mdx
+  guides/
+    integration.mdx
+    configuration.mdx
+    saved-traces.mdx
+    regression-checks.mdx
+  demo/
+    scenarios.mdx
+    running-locally.mdx
+  development/
+    evaluation.mdx
+    status.mdx
+    contributing.mdx
+  reference/
+    python.mdx
+    cli.mdx
+    configuration.mdx
+  images/
+    stuck-agent.png
+    exact-loop.png
+    semantic-loop.png
+    healthy-calculation.png
 ```
+
+## Publish later
+
+No hosting setup or deployment is part of this change. After content review and
+approval to publish:
+
+1. Connect `mahimathacker/loopguard` to your Mintlify project.
+2. Choose the reviewed branch and set the documentation/content path to `/docs`.
+3. Preview the build, then publish using the Mintlify dashboard.
+4. Add the resulting public URL to the root README.
+
+See [Mintlify monorepo setup](https://www.mintlify.com/docs/deploy/monorepo) for the
+content-path setting. Do not invent a `loopguard.mintlify.app` address before the
+project has a confirmed domain.

@@ -1,0 +1,6 @@
+# Allow public documentation discovery and retrieval.
+User-agent: *
+Allow: /
+
+# Mintlify generates /llms.txt, /llms-full.txt, and /sitemap.xml.
+# Add an absolute Sitemap directive after the documentation domain is confirmed.

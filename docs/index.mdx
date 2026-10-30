@@ -1,0 +1,88 @@
+---
+title: Introduction
+description: Catch agents that keep spending steps without getting closer to an answer.
+---
+
+LoopGuard watches an AI agent while it runs and looks for signs that it is stuck.
+An agent might repeat a tool call, retry a failing request, or keep searching after
+every result comes back empty. In a larger system, work can also circle between
+agents without anyone finishing it.
+
+<Note>
+These docs follow the current repository. The published `0.2.1` package supports
+the core callback and trace workflows; Gemini support, controlled demo scenarios,
+and additional decision display fields currently require the source checkout.
+See [release scope](/development/status).
+</Note>
+
+Repetition alone does not tell the whole story. Polling a job until it finishes
+can be useful. Asking the same question and getting the same empty answer usually
+isn't. LoopGuard looks at both the repeated behavior and the results.
+
+```text
+same tool + useful new result   -> continue
+same tool + same empty result   -> stop
+temporary error, then success   -> continue
+same permanent error repeated  -> stop
+```
+
+These are patterns to look for, not guarantees about a fixed number of calls.
+Decisions depend on the active detectors, thresholds, and recorded evidence.
+
+## See the problem
+
+<Frame caption="A real agent keeps searching for an impossible goal. LoopGuard detects repeated intent and interrupts the demo run.">
+  <img src="/images/stuck-agent.png" alt="LoopGuard demo with a red agent-tool loop, semantic repetition evidence, and an interrupted-run verdict" />
+</Frame>
+
+This screenshot comes from the repository's demo. It shows an earlier UI layout;
+the current UI also displays policy decisions and risk scores.
+The [visual examples and SDK code](/demo/scenarios#run-the-visual-examples-through-the-sdk)
+show how to inspect the same detection behavior from Python.
+
+## Where LoopGuard fits
+
+LoopGuard focuses on whether an agent is still making progress. It is not an agent
+framework, a general observability platform, a tracing replacement, or an LLM
+evaluation platform. Keep your existing agent and tracing tools; add LoopGuard
+where you need evidence about repetition and stuck runs.
+
+The Python package includes LangGraph/LangChain tool callbacks, a live-stream
+wrapper, and saved-trace analysis. The local demo helps you compare healthy repeats
+with runs that should stop.
+
+<CardGroup cols={2}>
+  <Card title="Run your first example" icon="terminal" href="/getting-started">
+    Exercise real tool callbacks without a model or API key.
+  </Card>
+  <Card title="Understand the pipeline" icon="diagram-project" href="/how-it-works">
+    Follow an event from the agent to a runtime decision.
+  </Card>
+  <Card title="Recognize stuck behavior" icon="magnifying-glass" href="/detection">
+    Compare repetition, failure, no progress, and cycles.
+  </Card>
+  <Card title="Compare demo scenarios" icon="play" href="/demo/scenarios">
+    See healthy recovery beside runs that should stop.
+  </Card>
+</CardGroup>
+
+Already running into a problem? Start with [troubleshooting](/troubleshooting).
+
+For background, read [AI agents and loops](/concepts/agents-and-loops),
+[tests, traces, and evals](/concepts/tests-traces-and-evals), and
+[agent trajectories and convergence](/concepts/trajectory-and-convergence).
+
+## Ask about LoopGuard
+
+Use **Open in ChatGPT** or **Open in Claude** in the menu beside the page title
+to ask questions with the current documentation page as context. These open an
+external AI tool using your own account.
+
+Try asking how to attach the callback, why a repeated tool call didn't stop, or
+which features are available in the published package. Start from the relevant
+guide or reference page and ask for links to the supporting documentation.
+
+For a project-wide question, include the published site's `llms.txt` index or
+`llms-full.txt` export. If the tool cannot fetch a page, use **Copy page** from
+the same menu and paste the Markdown into your conversation. Public page fetching
+needs the deployed docs URL; an external tool cannot read your localhost preview.

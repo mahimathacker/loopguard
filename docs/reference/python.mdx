@@ -1,0 +1,192 @@
+---
+title: Python API
+description: Public integration entry points, report shapes, and lower-level extension APIs.
+---
+
+The package is installed as `loopguard-runtime` and imported as `loopguard`.
+Start with the callback handler for tool events or the wrapper for supported
+LangGraph stream updates.
+
+This reference tracks the source checkout. The published `0.2.1` wheel has the
+core entry points, but lacks the checkout's additional serialized decision display
+fields and Gemini provider support. See [release scope](/development/status).
+
+## LoopGuardCallbackHandler
+
+```python
+from loopguard import LoopGuardCallbackHandler
+
+handler = LoopGuardCallbackHandler(
+    detectors=None,
+    interrupt_on_fatal=True,
+    max_steps=None,
+    max_tool_calls=None,
+)
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `detectors` | A detector list replacing the defaults; `None` selects the standard live list. |
+| `interrupt_on_fatal` | Raise `LoopGuardInterrupt` when the policy reaches `STOP`. |
+| `max_steps` | Optional recorded-event limit. |
+| `max_tool_calls` | Optional recorded-tool-call limit. |
+
+Constructor budget values should be positive integers. Config-file loading validates
+that constraint; direct constructors do not apply the same validation.
+
+Use `handler.raise_error = True` to let LangChain propagate callback exceptions.
+This is inherited framework behavior, not a LoopGuard constructor parameter.
+See [integration](/guides/integration) for surrounding tool-error handling.
+
+### Configuration and lifecycle
+
+```python
+handler = LoopGuardCallbackHandler.from_config(
+    "loopguard.yml",
+    interrupt_on_fatal=False,
+)
+```
+
+`from_config(path, interrupt_on_fatal=True)` reads the `live` settings.
+`reset()` clears detector state, messages, events, signals, decisions, and alerts
+before a new run. Prefer a fresh handler per run when running agents concurrently.
+
+### Read the result
+
+| Member | Returns |
+| --- | --- |
+| `report()` | Dict containing `interrupted`, `events`, `signals`, `decisions`, `alerts`, and `metrics`. |
+| `events` | List of event dictionaries. |
+| `signals` | List of signal dictionaries. |
+| `decisions` | List of decision dictionaries. |
+| `alerts` | Legacy `Alert` objects. |
+| `metrics()` | Metrics dictionary. |
+| `should_interrupt` | Whether any policy decision reached `STOP`. |
+| `messages` | Collected event/signal/decision/alert messages. |
+
+`report()["interrupted"]` is the policy's stop flag. It can be true even when
+observe-only mode or framework exception handling allowed execution to continue.
+
+## LoopGuardInterrupt
+
+```python
+from loopguard import LoopGuardInterrupt
+
+try:
+    result = agent.invoke(my_input, config={"callbacks": [handler]})
+except LoopGuardInterrupt as exc:
+    print(str(exc))
+    print(exc.decision)
+```
+
+This `RuntimeError` subclass carries `decision` and `alert` attributes, which can
+be `None`. A policy stop normally provides a `GuardDecision`; its `stop_reason`
+supplies the message. Catch it outside the run and retain the handler's report.
+
+## LoopGuard stream wrapper
+
+```python
+from loopguard import LoopGuard
+
+guard = LoopGuard(
+    detectors=None,
+    recursion_limit=50,
+    max_steps=None,
+    max_tool_calls=None,
+)
+```
+
+`LoopGuard.from_config(path, detectors=None, recursion_limit=50)` loads live
+settings. Passing a detector list replaces the configured/default list.
+
+`guard.stream(agent, initial=None, recursion_limit=None)` yields dictionaries.
+An explicit recursion limit for `stream()` overrides the instance value.
+
+| Message `type` | Meaning |
+| --- | --- |
+| `event` | An interpreted graph update. |
+| `signal` | A detector finding. |
+| `decision` | The policy action and reasons. |
+| `alert` | A compatibility alert. |
+| `error` | A runtime/provider error or graph recursion-limit failure. |
+| `metrics` | Final recorded-run metrics. |
+| `done` | End of the stream, with `interrupted` and `reason`. |
+
+The wrapper stops consuming updates after `STOP`. It catches runtime exceptions,
+emits `error`, and still emits final metrics and `done`. Inspect errors separately
+from the interruption flag. `initial=None` uses the scripted weather-demo input;
+pass your own initial state for other agents.
+
+The lower-level exported `stream_run(agent, detectors, initial=None,
+recursion_limit=50)` uses the same message contract.
+
+## Report data
+
+| Data | Main fields |
+| --- | --- |
+| Event | `step`, `node`, `action`, `signature`, `payload`. |
+| Signal | `detector`, `kind`, `score`, `message`, `evidence`. |
+| Decision | `action`, `risk_score`, `reasons`, plus serialized `recommended_action` and `stop_reason`. |
+| Metrics | `total_steps`, `by_node`, `tool_calls`, `distinct_tool_calls`, `most_common_action`, `repeat_rate`. |
+
+Decision actions serialize as lowercase strings: `continue`, `warn`, `replan`,
+`pause`, and `stop`. `stop_reason` is `None` for other actions. `repeat_rate` is
+the fraction of tool calls beyond the first instance of each distinct signature,
+not a measure of model quality or wasted tokens.
+
+## Saved-trace functions
+
+These functions live in `loopguard.ingest` rather than the package root:
+
+```python
+from loopguard.ingest import analyze_file, analyze_trace
+
+reports = analyze_file("examples/sample_trace.json")
+for report in reports:
+    print(report.run_id, report.status, report.tool_calls)
+
+single = analyze_trace({"run_id": "empty-run", "steps": []})
+print(single.status)
+```
+
+`analyze_trace(trace, detectors=None)` returns a `TraceReport`.
+`analyze_file(path, detectors=None)` returns a list of reports. Supply a custom
+detector list to change offline behavior or add a semantic detector. The functions
+replay the whole trace and do not execute its tools.
+
+`TraceReport` exposes `run_id`, `steps`, `events`, `tool_calls`, `decisions`,
+`alerts`, `status`, `looped`, and `final_decision`. `looped` means any `STOP`,
+including failures and budgets, not only a literal loop.
+
+## Lower-level public surfaces
+
+Use these when writing an adapter or experimenting with policy. They are not
+required for normal callback integration.
+
+| Export | Contract |
+| --- | --- |
+| `Tracer()` | `record(node, action, signature, **payload)` creates ordered events; `timeline()` formats them. |
+| `Monitor(detectors, tracer=None, policy=None)` | `observe_decision(node, action, signature, **payload)` returns the event, new signals, decision, and alerts. |
+| `Monitor.observe(...)` | Records the same observation but returns compatibility alerts only. |
+| `DetectionSignal(detector, kind, score, message, evidence=...)` | Evidence passed to the policy. |
+| `GuardAction` | Enum members `CONTINUE`, `WARN`, `REPLAN`, `PAUSE`, and `STOP`. |
+| `GuardDecision(action, risk_score, reasons=...)` | Decision object with `recommended_action_label` and `stop_reason` properties. |
+| `PolicyEngine(config=None)` | `decide(signals)` returns a `GuardDecision`. |
+| `PolicyConfig(...)` | Defaults: `warn_at=0.50`, `replan_at=0.70`, `pause_at=0.85`, `stop_at=0.90`. |
+
+The default callback/wrapper constructors do not expose a custom policy parameter.
+Use a lower-level `Monitor` when you need to inject a `PolicyEngine`.
+
+Detector classes are imported from `loopguard.detectors`; embedders from
+`loopguard.embeddings`. See [detection](/detection) and the
+[configuration reference](/reference/configuration) for behavior and defaults.
+
+## Evaluation helper
+
+`loopguard.evals.convergence_score(step_counts)` returns the average ratio of the
+shortest positive supplied count to each positive count. It ignores nonpositive
+counts and returns `0.0` when no positive counts remain.
+
+This function accepts step counts, not traces or success labels. It does not
+verify outcomes or measure cost. See [agent trajectories and convergence](/concepts/trajectory-and-convergence)
+for a runnable example and how to select comparable runs.

@@ -1,0 +1,98 @@
+---
+title: Evaluation and tests
+description: Check offline behavior and understand what the small detector evaluation measures.
+---
+
+The tests exercise detection, runtime decisions, callback behavior, stream handling,
+config parsing, and saved-trace checks. Most use fake agents and fake embeddings,
+so they don't need network access or provider credentials.
+
+For the concepts behind these checks, read
+[tests, traces, and evals](/concepts/tests-traces-and-evals). For the step-count
+helper and its limits, see [agent trajectories and convergence](/concepts/trajectory-and-convergence).
+
+## Run the tests
+
+From the repository root:
+
+```bash
+python -m unittest discover -v
+```
+
+One test imports the demo scenario definitions and skips if their framework
+dependencies aren't installed. To include it, install the framework extra first:
+
+```bash
+pip install -e ".[langgraph]"
+python -m unittest discover -v
+```
+
+The runtime test module contains 49 tests. It checks that repeated calls alone don't
+force a stop, healthy polling advances, retryable failures can recover, permanent
+failures stop, and action/handoff cycles are detected.
+Discovery also runs the documentation automation tests. See
+[contributing and docs maintenance](/development/contributing) for those checks.
+
+## Replay the progress-aware fixtures
+
+[`examples/v02_labeled_traces.json`](https://github.com/mahimathacker/loopguard/blob/master/examples/v02_labeled_traces.json)
+contains seven labeled runs:
+
+- An exact search loop with empty output.
+- Healthy polling with changing status.
+- A rate-limit failure followed by success.
+- Repeated authentication failure.
+- Alternating search/summarize actions without progress.
+- A closed planner/researcher/reviewer handoff cycle.
+- Healthy pagination with advancing pages.
+
+The tests compare each run's final decision with its `expected_decision` value.
+You can inspect the same runs directly:
+
+```bash
+python -m loopguard.ingest examples/v02_labeled_traces.json --json
+```
+
+## Run the detector evaluation
+
+The evaluation module needs `python-dotenv`, which is included in the demo extra:
+
+```bash
+pip install python-dotenv
+python -m loopguard.evals
+```
+
+With `OPENAI_API_KEY` unset in both the environment and `.env`, the command runs
+the offline exact-detector evaluation and prints illustrative convergence scores.
+If that key is set, it also runs provider-backed comparisons and a judge example,
+which need the relevant SDKs and can incur API charges.
+
+The exact-detector evaluation uses a separate six-case in-code dataset. It measures
+whether detector evidence fires, **not whether the runtime policy reaches `STOP`**.
+That matters because repetition can be a warning while useful work continues.
+
+| Metric | Meaning here | Verified fixture result |
+| --- | --- | --- |
+| Precision | Of cases flagged, how many were labeled loops? | `1.00` |
+| Recall | Of labeled loops, how many did it flag? | `0.67` |
+| F1 | A balance of precision and recall. | `0.80` |
+
+These results come from `LoopDetector(threshold=3)` on the six-case fixture:
+two true positives, zero false positives, one false negative, and three true
+negatives. The missed case is a paraphrase loop, which exact signatures don't catch.
+These are small fixture results, not production benchmarks or whole-policy accuracy.
+
+The printed convergence examples use fixed step-count lists. They illustrate a
+scoring function; the command does not measure real agent latency or token savings.
+
+## Evaluate your own workload
+
+Collect healthy retries and polling as well as stuck runs. Start with observe-only
+reports, label the outcomes, then check changes against both groups. A detector
+that catches every loop but interrupts normal polling is not a useful improvement.
+
+Include the trace, settings, and expected decision when reporting a detection issue.
+See [saved-trace analysis](/guides/saved-traces) for the accepted input format.
+To turn observed failures into before/after comparisons, follow the
+[evaluation workflow](/concepts/trajectory-and-convergence#treat-changes-as-experiments).
+For a task-focused walkthrough, [add a trace regression check](/guides/regression-checks).

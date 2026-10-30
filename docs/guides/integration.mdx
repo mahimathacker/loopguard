@@ -1,0 +1,132 @@
+---
+title: LangGraph and LangChain
+description: Add tool callbacks to an existing agent and control how stop decisions reach your application.
+---
+
+Keep your existing agent construction and input. LoopGuard attaches through the
+`callbacks` entry in the run config and records tool starts, results, and errors.
+
+## Attach the callback
+
+In this example, `agent` is your already-built LangGraph/LangChain agent and
+`my_input` is the input it normally accepts.
+
+```python
+from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
+
+handler = LoopGuardCallbackHandler()
+handler.raise_error = True
+
+try:
+    result = agent.invoke(my_input, config={"callbacks": [handler]})
+except LoopGuardInterrupt as exc:
+    result = None
+    print("Run stopped:", exc)
+finally:
+    report = handler.report()
+```
+
+Create one handler per run. If you reuse a handler, call `handler.reset()` before
+the next run to clear its recorded state.
+
+## Let the interrupt reach your application
+
+At `STOP`, the handler raises `LoopGuardInterrupt` unless observe-only mode is
+enabled. LangChain callbacks normally suppress callback errors, so set
+`handler.raise_error = True` when you want to catch the interrupt around `invoke`.
+
+An agent can have another error boundary around tool execution. If that boundary
+catches the interrupt and returns an error message to the model, the agent may
+continue. Configure it to propagate `LoopGuardInterrupt` and verify this using
+a repeated-empty-result run before relying on automatic interruption.
+
+For LangGraph's `ToolNode`, `handle_tool_errors=False` propagates tool errors;
+this also changes handling of ordinary tool failures. A custom error handler can
+instead re-raise `LoopGuardInterrupt` while handling other exceptions. Check the
+behavior of your installed framework version.
+
+`REPLAN` and `PAUSE` remain recorded recommendations. This integration does not
+automatically replace a plan, suspend a graph, or roll back a completed tool call.
+
+## Observe first
+
+Use observe-only mode when tuning thresholds or comparing LoopGuard decisions
+with your own run labels:
+
+```python
+handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
+result = agent.invoke(my_input, config={"callbacks": [handler]})
+
+for decision in handler.report()["decisions"]:
+    print(decision["action"], decision["risk_score"])
+```
+
+The callback's `interrupted` report field records whether `STOP` was reached,
+including in observe-only mode. Track actual execution separately in your application.
+
+## Load application settings
+
+Save a small `loopguard.yml` in your working directory:
+
+```yaml
+live:
+  max_steps: 40
+  max_tool_calls: 15
+  exact_threshold: 3
+  exact_window: 12
+```
+
+Then change the handler construction:
+
+```python
+handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
+handler.raise_error = True
+```
+
+These limits count recorded tool events and calls, not model tokens. See
+[configuration](/guides/configuration) before choosing values for your workload.
+
+## Keep a report with the result
+
+The repository's
+[`run_with_loopguard`](https://github.com/mahimathacker/loopguard/blob/master/examples/langgraph_callback_demo.py)
+helper returns the agent result alongside interruption state, signals, decisions,
+and metrics. For example, from a repository checkout with your compiled `agent`:
+
+```python
+from examples.langgraph_callback_demo import run_with_loopguard
+
+output = run_with_loopguard(
+    agent,
+    {"messages": [{"role": "user", "content": "Find the account's current status."}]},
+    config_path="loopguard.yml",
+)
+print(output["loopguard"]["decisions"])
+```
+
+The helper uses default settings when you omit `config_path`.
+
+## Use the stream wrapper for supported graph updates
+
+The demo backend and CLI call `stream_run()` directly. `LoopGuard.stream()` is
+the public SDK wrapper around that same runner:
+
+```python
+from loopguard import LoopGuard
+
+guard = LoopGuard(max_tool_calls=15)
+for message in guard.stream(agent, initial=my_input):
+    if message["type"] == "decision":
+        print(message["action"], message["risk_score"])
+```
+
+The wrapper interprets the scripted demo state fields and LangGraph message updates.
+It reads the newest message and the first tool call in that message; it is not a
+general adapter for every possible graph state. Use callbacks to observe individual
+tool invocations or [saved traces](/guides/saved-traces) for exported runs.
+
+The [four visual examples](/demo/scenarios#run-the-visual-examples-through-the-sdk)
+pair UI captures with runnable Python SDK streams.
+
+For framework background, see the official
+[LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview).

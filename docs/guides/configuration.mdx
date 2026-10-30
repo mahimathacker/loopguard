@@ -1,0 +1,136 @@
+---
+title: Configure LoopGuard
+description: Tune run limits and detection sensitivity for the way your agent works.
+---
+
+A polling agent and a research agent can repeat for different reasons. Change
+settings when healthy runs trigger too much evidence, stuck runs take too long to
+flag, or you need a hard work limit.
+
+## Start with one application config
+
+Save this as `loopguard.yml`:
+
+```yaml
+live:
+  max_steps: 40
+  max_tool_calls: 15
+  exact_threshold: 3
+  exact_window: 12
+  stall_patience: 4
+  stall_fatal: false
+  handoff_repeats: 2
+  handoff_window: 16
+  handoff_max_cycle_length: 5
+  handoff_fatal: true
+  semantic: false
+
+check:
+  fail_on:
+    - looping
+    - stalled
+  max_steps: 40
+  max_tool_calls: 15
+```
+
+Load the `live` section in your application:
+
+```python
+from loopguard import LoopGuardCallbackHandler
+
+handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
+handler.raise_error = True
+```
+
+Or use the `check` section with an exported trace:
+
+```bash
+python -m loopguard.check examples/sample_trace.json --config loopguard.yml
+```
+
+The trace command assumes a repository checkout. The sample deliberately includes
+a loop, so this check exits with code `1`.
+
+## Choose limits and sensitivity
+
+| Setting | What it controls | When to change it |
+| --- | --- | --- |
+| `max_steps` | Maximum recorded live events; exported steps in check mode. | Cap total work independently of loop detection. |
+| `max_tool_calls` | Maximum recorded tool calls. | Limit repeated tool work. |
+| `exact_threshold` / `exact_window` | Matching calls required inside a recent event window. | Allow longer healthy polling or catch exact loops sooner. |
+| `stall_patience` | Identical consecutive observations required by `StallDetector`. | Your tools often return the same status while working. |
+| `handoff_repeats` / `handoff_window` | Repeated closed handoff cycles inside an event window. | Your workflow legitimately revisits agents. |
+| `semantic` | Enables the embedding-backed detector. | The agent repeats an approach using different words. |
+
+`stall_patience` changes `StallDetector` only. `ProgressDetector` has its own
+three-observation default, which this config loader does not expose. Likewise,
+cycle and repeated-failure thresholds require a custom detector list in Python.
+
+<Warning>
+Settings ending in `_fatal` are detector evidence hints. They do not override the
+policy or disable every route to `STOP`. For example, `exact_fatal: false` still
+allows repetition plus no progress to stop a run. Use observe-only mode when you
+need to guarantee that the callback will not raise an interrupt.
+</Warning>
+
+## Enable semantic detection
+
+Install the optional SDKs:
+
+```bash
+pip install "loopguard-runtime[semantic]"
+```
+
+Set `semantic: true` in the `live` section. Choose the embedding provider in your
+process environment:
+
+OpenAI embeddings work with the published `0.2.1` package. Gemini support is in
+the source checkout; its tab below includes the source installation step.
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```bash
+    export LOOPGUARD_EMBEDDING_PROVIDER=openai
+    export OPENAI_API_KEY=your-key
+    ```
+
+    The implementation uses `text-embedding-3-small` by default.
+  </Tab>
+  <Tab title="Gemini">
+    ```bash
+    git clone https://github.com/mahimathacker/loopguard.git
+    cd loopguard
+    pip install -e ".[semantic]"
+    export LOOPGUARD_EMBEDDING_PROVIDER=gemini
+    export GOOGLE_API_KEY=your-key
+    ```
+
+    `GEMINI_API_KEY` is also accepted. The implementation uses
+    `gemini-embedding-2-preview` by default. Confirm access to that model in your account.
+  </Tab>
+</Tabs>
+
+In PowerShell, set values with `$env:NAME = "value"` instead of `export`.
+The library reads environment variables; it does not load `.env` files for you.
+The demo entry points load `.env` explicitly.
+
+Embedding calls require network access and may incur provider charges. Embeddings
+are cached by text within each embedder instance. The config loader does not expose
+an embedding-model setting; custom models are selected through Python embedder objects.
+
+## Keep config simple
+
+The loader accepts JSON or a small YAML subset: scalar values, a section mapping,
+and simple lists. It does not implement full YAML features such as anchors,
+multiline strings, or arbitrary nesting. Use `true` and `false` for booleans.
+
+If a named `live` or `check` section is absent, that consumer falls back to top-level
+keys. Check flags override config values. Repeated `--fail-on` flags replace the
+configured failure set rather than extending it.
+
+All detector settings loaded from config must be positive; budgets must be positive
+integers. Omit a budget to leave it unset. Tune thresholds against labeled examples
+from your own application.
+
+[Look up every supported config field](/reference/configuration) or
+[inspect saved traces](/guides/saved-traces) while tuning.

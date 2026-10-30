@@ -1,0 +1,52 @@
+---
+title: Project status
+description: Current scope, repository layout, and directions that remain roadmap ideas.
+---
+
+LoopGuard is an alpha project. The package metadata and published PyPI release
+are `0.2.1`, with Python 3.11+ required and classifiers for Python 3.11 and 3.12.
+These docs describe the repository implementation. Inspection of the published
+`0.2.1` wheel confirmed that Gemini embeddings/provider selection and controlled
+ReAct demo scenarios are not bundled in that release. The checkout also adds
+`recommended_action` and `stop_reason` to serialized decisions, along with clearer
+stop messages. Use a source installation for those features.
+
+## Available today
+
+- LangGraph/LangChain tool callbacks, with observe-only reporting or stop exceptions.
+- A wrapper for the supported live graph-update shapes.
+- Exact, semantic, progress, failure, cycle, handoff, and budget detectors.
+- JSON saved-trace analysis and CLI pass/fail checks.
+- A local FastAPI/WebSocket demo with a Next.js UI.
+- Offline tests and a small detector evaluation harness.
+
+`REPLAN` and `PAUSE` are recommendations. Automatic replanning, persisted pause/resume,
+JavaScript SDK support, and a hosted LoopGuard runtime are not implemented here.
+
+## Directions to explore
+
+The existing roadmap focuses on tuning thresholds with real traces, improving
+healthy retry/polling examples, and adding GitHub check annotations for trace
+failures. LangGraph.js/LangChain.js support remains an idea for later.
+
+These are possible next steps, not shipped features or delivery commitments.
+
+## Find your way around the source
+
+| Area | What to read |
+| --- | --- |
+| Runtime package | `loopguard/`: callbacks, stream wrapper, detectors, policy, trace analysis, and config. |
+| Runnable examples | `examples/`: offline callback example and JSON traces. |
+| Behavior checks | `tests/test_loopguard.py`. |
+| Demo backend | `server.py`, `main.py`, and `loopguard/scenarios.py`. |
+| Demo frontend | `ui/app/` and `ui/public/`. |
+| Documentation | `docs/`, with navigation in `docs/docs.json`. |
+
+## Contribute
+
+[Open an issue](https://github.com/mahimathacker/loopguard/issues) with the smallest
+trace that reproduces a problem, the settings you used, and the decision you expected.
+For a code change, run the [offline suite](/development/evaluation) and include
+validation relevant to the behavior you changed.
+The [contributing guide](/development/contributing) explains CI checks and the
+documentation review expected for developer-facing changes.
