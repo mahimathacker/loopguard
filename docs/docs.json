@@ -28,6 +28,13 @@
         ]
       },
       {
+        "group": "Explore the demo",
+        "pages": [
+          "demo/scenarios",
+          "demo/running-locally"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
           "reference/cli",
