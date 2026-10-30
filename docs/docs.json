@@ -21,7 +21,15 @@
       {
         "group": "Use LoopGuard",
         "pages": [
-          "guides/integration"
+          "detection",
+          "guides/integration",
+          "guides/configuration"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/configuration"
         ]
       }
     ]
