@@ -1,0 +1,15 @@
+# Only public HTTP links. Local paths and anchors are checked on every PR.
+scheme = ["https", "http"]
+exclude_all_private = true
+include_mail = false
+include_verbatim = false
+
+timeout = 20
+max_retries = 2
+retry_wait_time = 2
+max_concurrency = 4
+method = "get"
+accept = ["200..=299"]
+
+# Keep failures visible rather than accepting 403/429 responses as working links.
+# Add any future exception narrowly, with a reason and a date for review.

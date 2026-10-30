@@ -1,0 +1,28 @@
+name: External documentation links
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Check public documentation URLs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check external links and fail with a job summary
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: >-
+            --config .lychee.toml
+            README.md CONTRIBUTING.md "docs/**/*.md" "docs/**/*.mdx"
+          lycheeVersion: v0.24.2
+          fail: true
+          jobSummary: true
