@@ -66,6 +66,13 @@ For example, checking whether a router selected `order_status_check` with
 the right caveats may need a rubric and review. Neither check establishes that the
 run avoided loops.
 
+<Note>
+**Diagram draft D02: One run, several evaluation questions.** Start with an agent
+run and its recorded trace, then separate answer/task checks from run-behavior
+checks. Place LoopGuard on the run-behavior lane. Show code checks, model judges,
+and human review as evaluation methods; a trace alone does not establish correctness.
+</Note>
+
 Use model judges as evaluators, not as automatic ground truth. Compare their
 labels with reviewed examples, inspect disagreements, and make the rubric explicit.
 Known limitations include position and verbosity biases, discussed in
