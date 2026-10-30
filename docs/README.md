@@ -294,15 +294,19 @@ docs/
 ## Hosted site and deployment
 
 The documentation is published at
-[independent-6adc4cfc.mintlify.site](https://independent-6adc4cfc.mintlify.site/).
+[loopguard.mintlify.site](https://loopguard.mintlify.site/).
 On October 30, 2026, the homepage, getting-started guide, `/robots.txt`,
 `/llms.txt`, `/llms-full.txt`, `/getting-started.md`, and `/sitemap.xml`
 returned HTTP 200. The sitemap listed all 20 documentation pages.
 
-Mintlify is connected to `mahimathacker/loopguard`, with `master` as the deployment
-branch and `/docs` as the documentation/content path. Review future changes in
-a pull request, check the preview and CI results, and verify the public site after
-the merged changes deploy.
+The branded site was provisioned through the Mintlify CLI, populated from this
+repository, and claimed into the owner's account. Its initial content lives in
+a Mintlify-managed repository. In the new project's Git Settings, connect
+`mahimathacker/loopguard`, choose `master` as the deployment branch, and set `/docs`
+as the documentation/content path to enable future deployments from GitHub.
+The original site retains its existing GitHub connection until that setup changes.
+Review future changes in a pull request, check the preview and CI results, and
+verify the public site after the merged changes deploy.
 
 See [Mintlify monorepo setup](https://www.mintlify.com/docs/deploy/monorepo) for the
 content-path setting. Only replace the public URL after the new domain has been

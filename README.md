@@ -4,7 +4,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
 [![PyPI monthly downloads](https://img.shields.io/pypi/dm/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
 
-[![Docs](https://img.shields.io/badge/Docs-2563EB?style=for-the-badge)](https://independent-6adc4cfc.mintlify.site/)
+[![Docs](https://img.shields.io/badge/Docs-2563EB?style=for-the-badge)](https://loopguard.mintlify.site/)
 [![PyPI](https://img.shields.io/badge/PyPI-3775A9?style=for-the-badge)](https://pypi.org/project/loopguard-runtime/)
 [![Demo](https://img.shields.io/badge/Demo-FF0000?style=for-the-badge)](https://youtu.be/i5XRrvFoPA0)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge)](https://github.com/mahimathacker/loopguard)
@@ -132,7 +132,7 @@ harness. [Evaluation and its limits →](docs/development/evaluation.mdx)
 
 ## Documentation
 
-**Hosted documentation:** [Read the LoopGuard docs](https://independent-6adc4cfc.mintlify.site/).
+**Hosted documentation:** [Read the LoopGuard docs](https://loopguard.mintlify.site/).
 
 The [Mintlify source](docs/index.mdx) covers the full developer journey.
 The [concept guides](docs/concepts/agents-and-loops.mdx) explain agent loops,

@@ -3,4 +3,4 @@ User-agent: *
 Allow: /
 
 # Mintlify generates /llms.txt, /llms-full.txt, and /sitemap.xml.
-Sitemap: https://independent-6adc4cfc.mintlify.site/sitemap.xml
+Sitemap: https://loopguard.mintlify.site/sitemap.xml
