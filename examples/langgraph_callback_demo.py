@@ -9,8 +9,13 @@ from __future__ import annotations
 from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
 
 
-def run_with_loopguard(agent, my_input: dict) -> dict:
-    handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
+def run_with_loopguard(agent, my_input: dict, config_path: str | None = None) -> dict:
+    handler = (
+        LoopGuardCallbackHandler.from_config(config_path)
+        if config_path is not None
+        else LoopGuardCallbackHandler()
+    )
+    handler.raise_error = True  # Let LangChain propagate callback exceptions.
     try:
         result = agent.invoke(my_input, config={"callbacks": [handler]})
     except LoopGuardInterrupt:

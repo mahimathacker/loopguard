@@ -12,14 +12,30 @@
     "groups": [
       {
         "group": "Start here",
-        "pages": ["index", "how-it-works"]
+        "pages": [
+          "index",
+          "getting-started",
+          "how-it-works"
+        ]
+      },
+      {
+        "group": "Use LoopGuard",
+        "pages": [
+          "guides/integration"
+        ]
       }
     ]
   },
   "navbar": {
     "links": [
-      { "label": "GitHub", "href": "https://github.com/mahimathacker/loopguard" },
-      { "label": "PyPI", "href": "https://pypi.org/project/loopguard-runtime/" }
+      {
+        "label": "GitHub",
+        "href": "https://github.com/mahimathacker/loopguard"
+      },
+      {
+        "label": "PyPI",
+        "href": "https://pypi.org/project/loopguard-runtime/"
+      }
     ],
     "primary": {
       "type": "button",
