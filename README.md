@@ -33,8 +33,7 @@ the actual decision.
 
 [![LoopGuard catching a real search agent in a semantic loop and interrupting the run](ui/public/realagentloop.png)](https://youtu.be/i5XRrvFoPA0)
 
-An agent keeps searching for an impossible confirmation. LoopGuard flags repeated
-intent and interrupts the demo. This repository capture shows an earlier UI layout.
+Screenshot from a LoopGuard demo run showing repeated intent and an interrupted run.
 The [four visual examples](docs/demo/scenarios.mdx) pair detection explanations
 with Python SDK code so you can inspect the same behavior in your own program.
 

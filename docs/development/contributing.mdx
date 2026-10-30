@@ -108,20 +108,18 @@ an exclusion just to get a green check.
 
 ## Check publication readiness
 
-Normal PR checks warn about reader-facing hosted-URL and screenshot placeholders
-so work in progress remains reviewable. Before publication:
+Run the strict documentation check before publishing or tagging a release:
 
 ```bash
 python scripts/check_docs.py --release
 ```
 
-The strict check must pass after the hosted URL and required screenshots are real.
+The strict check rejects unresolved publication placeholders in reader-facing content.
 The same check runs for tags beginning with `v` and when **release_ready** is selected
 in the Documentation workflow's manual inputs. It does not create a release or
 publish to PyPI or Mintlify.
 
-The maintainer handoff is excluded from publication and can describe the remaining
-tasks. Placeholder examples inside code fences do not count as unfinished content.
+Placeholder examples inside code fences do not count as unfinished content.
 
 ## Add evidence with your contribution
 
