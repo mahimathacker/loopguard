@@ -180,3 +180,13 @@ Use a lower-level `Monitor` when you need to inject a `PolicyEngine`.
 Detector classes are imported from `loopguard.detectors`; embedders from
 `loopguard.embeddings`. See [detection](/detection) and the
 [configuration reference](/reference/configuration) for behavior and defaults.
+
+## Evaluation helper
+
+`loopguard.evals.convergence_score(step_counts)` returns the average ratio of the
+shortest positive supplied count to each positive count. It ignores nonpositive
+counts and returns `0.0` when no positive counts remain.
+
+This function accepts step counts, not traces or success labels. It does not
+verify outcomes or measure cost. See [agent trajectories and convergence](/concepts/trajectory-and-convergence)
+for a runnable example and how to select comparable runs.

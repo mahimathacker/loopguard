@@ -7,6 +7,10 @@ The tests exercise detection, runtime decisions, callback behavior, stream handl
 config parsing, and saved-trace checks. Most use fake agents and fake embeddings,
 so they don't need network access or provider credentials.
 
+For the concepts behind these checks, read
+[tests, traces, and evals](/concepts/tests-traces-and-evals). For the step-count
+helper and its limits, see [agent trajectories and convergence](/concepts/trajectory-and-convergence).
+
 ## Run the tests
 
 From the repository root:
@@ -87,3 +91,5 @@ that catches every loop but interrupts normal polling is not a useful improvemen
 
 Include the trace, settings, and expected decision when reporting a detection issue.
 See [saved-trace analysis](/guides/saved-traces) for the accepted input format.
+To turn observed failures into before/after comparisons, follow the
+[evaluation workflow](/concepts/trajectory-and-convergence#treat-changes-as-experiments).

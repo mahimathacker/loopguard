@@ -51,6 +51,10 @@ Start here
   Introduction
   Getting started
   How LoopGuard works
+Concepts
+  AI agents and loops
+  Tests, traces, and evals
+  Agent trajectories and convergence
 Use LoopGuard
   Detecting stuck agents
   LangGraph and LangChain
@@ -166,13 +170,15 @@ avoid clipping the later success out of the recovery capture.
 - A real LangGraph `ToolNode` run propagated the stop exception when configured
   to let tool errors escape.
 - Mintlify full validation/build and internal link checks passed.
-- All 15 pages rendered successfully in Chrome with no broken images. The
-  introduction, getting-started page, demo scenarios, and config reference were
-  checked at a 390px viewport without document overflow.
+- All 18 pages rendered successfully in Chrome with no broken images. The
+  introduction, getting-started page, demo scenarios, config reference, and all
+  three concept pages were checked at a 390px viewport without document overflow.
 - Mintlify found alt text on every image. Brand colors meet the check's AA/minimum
   contrast thresholds; its optional AAA suggestion remains a warning.
 - Python code blocks parsed, JSON/YAML samples loaded, and nine trace/example
   command variants returned the expected exit codes.
+- The convergence example printed `0.58`; the equal-score and nonpositive-count
+  limitations described in the concept guide were checked against the helper.
 - The local backend's runtime and graph routes and the exact WebSocket run were
   checked without making provider calls.
 
@@ -196,6 +202,10 @@ docs/
   how-it-works.mdx
   detection.mdx
   troubleshooting.mdx
+  concepts/
+    agents-and-loops.mdx
+    tests-traces-and-evals.mdx
+    trajectory-and-convergence.mdx
   guides/
     integration.mdx
     configuration.mdx

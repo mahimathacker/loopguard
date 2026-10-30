@@ -135,6 +135,8 @@ harness. [Evaluation and its limits →](docs/development/evaluation.mdx)
 **Hosted documentation:** [DOCS URL TO ADD AFTER DEPLOYMENT]
 
 The [Mintlify source](docs/index.mdx) covers the full developer journey.
+The [concept guides](docs/concepts/agents-and-loops.mdx) explain agent loops,
+tests and traces, and evaluating the path as well as the answer.
 See [preview and deployment instructions](docs/README.md),
 [troubleshooting](docs/troubleshooting.mdx), or the [Python API](docs/reference/python.mdx).
 
