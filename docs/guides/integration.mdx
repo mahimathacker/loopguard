@@ -40,6 +40,14 @@ catches the interrupt and returns an error message to the model, the agent may
 continue. Configure it to propagate `LoopGuardInterrupt` and verify this using
 a repeated-empty-result run before relying on automatic interruption.
 
+<Note>
+**Diagram draft D03: Tool callback to application interrupt.** Follow a tool start,
+result, or error through the callback, recorded events, detectors, and policy.
+At `STOP`, separate observe-only reporting from raising `LoopGuardInterrupt`.
+Show that the interrupt reaches the application only when callback errors and
+the tool-execution boundary allow it to propagate.
+</Note>
+
 For LangGraph's `ToolNode`, `handle_tool_errors=False` propagates tool errors;
 this also changes handling of ordinary tool failures. A custom error handler can
 instead re-raise `LoopGuardInterrupt` while handling other exceptions. Check the
