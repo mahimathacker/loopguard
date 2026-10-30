@@ -1,55 +1,47 @@
 # LoopGuard
 
-Progress-aware runtime guardrails for LangGraph and LangChain agents.
+[![PyPI version](https://img.shields.io/pypi/v/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
+[![Python versions](https://img.shields.io/pypi/pyversions/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
+[![PyPI monthly downloads](https://img.shields.io/pypi/dm/loopguard-runtime)](https://pypi.org/project/loopguard-runtime/)
 
-LoopGuard watches agent runs and decides whether the agent should continue, warn, replan,
-pause, or stop. It does not stop an agent just because a tool repeats. It combines
-repeated or cyclic actions with stagnant results, repeated failures, and lack of progress
-to detect when the agent is actually stuck.
+[![Docs](https://img.shields.io/badge/Docs-2563EB?style=for-the-badge)](docs/README.md)
+[![PyPI](https://img.shields.io/badge/PyPI-3775A9?style=for-the-badge)](https://pypi.org/project/loopguard-runtime/)
+[![Demo](https://img.shields.io/badge/Demo-FF0000?style=for-the-badge)](https://youtu.be/i5XRrvFoPA0)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge)](https://github.com/mahimathacker/loopguard)
+
+**Runtime guardrails for AI agents that detect loops, repeated failures, and runs that stop making progress.**
+
+Agents can keep spending time and tokens without getting closer to an answer.
+LoopGuard watches LangGraph and LangChain agents as they run, checking repeated actions
+against new results, progress, and failures to decide when to stop.
 
 ```text
-same tool repeated + changing results       -> warn/continue
-same tool repeated + same empty result      -> stop
-search -> summarize -> search + no progress -> stop
-temporary failure then success              -> continue
-repeated permanent failure                  -> stop
+same tool + useful new result   -> continue
+same tool + same empty result   -> stop
+503 -> 503 -> success           -> continue
+401 -> 401 -> 401               -> stop
 ```
 
-## Install
+## See it in action
 
-LoopGuard is published on PyPI as `loopguard-runtime`:
+[![LoopGuard UI detecting a paraphrase loop and interrupting an agent pursuing an impossible goal](ui/public/realagentloop.png)](https://youtu.be/i5XRrvFoPA0)
+
+An agent keeps rephrasing the same search while pursuing an impossible goal. LoopGuard
+flags the loop and interrupts the run; the UI shows the evidence, tool calls, and verdict.
+
+[Watch the demo on YouTube](https://youtu.be/i5XRrvFoPA0) · [Run it locally](docs/README.md#running-the-demo)
+
+## Quick start
+
+**Prerequisites:** Python 3.11+ and pip. The live example assumes you already have a
+LangGraph/LangChain agent and its framework dependencies installed. See the
+[installation guide](docs/README.md#installation) for optional dependencies.
 
 ```bash
 pip install loopguard-runtime
 ```
 
-Or pin the current release:
-
-```bash
-pip install loopguard-runtime==0.2.1
-```
-
-The package name is `loopguard-runtime`, but the Python import is `loopguard`:
-
-```python
-from loopguard import LoopGuardCallbackHandler
-```
-
-For LangGraph/LangChain callback dependencies:
-
-```bash
-pip install "loopguard-runtime[langgraph]"
-```
-
-For the full demo stack from GitHub source:
-
-```bash
-pip install "loopguard-runtime[demo,server] @ git+https://github.com/mahimathacker/loopguard.git"
-```
-
-## Quickstart
-
-Attach LoopGuard to a LangGraph/LangChain run with the callback handler:
+For an existing LangGraph/LangChain agent (`agent`) and its input (`my_input`):
 
 ```python
 from loopguard import LoopGuardCallbackHandler, LoopGuardInterrupt
@@ -64,284 +56,100 @@ except LoopGuardInterrupt as exc:
 print(handler.report())
 ```
 
-The report includes:
+LoopGuard records the run, collects detector evidence, and can interrupt execution when
+the policy reaches `STOP`. Repeated tool calls alone do not trigger a stop.
 
-- `events`: normalized tool calls and observations
-- `signals`: detector evidence such as repeated calls or no progress
-- `decisions`: policy actions such as continue, warn, replan, pause, or stop
-- `metrics`: step counts, tool calls, repeat rate, and common actions
-- `alerts`: legacy compatibility alerts
+[Read the getting started guide →](docs/README.md#installation)
 
-`REPLAN` and `PAUSE` are recommendations today. LoopGuard records them in the report;
-automatic interruption happens only when the policy reaches `STOP`.
+## What LoopGuard detects
 
-To observe without stopping the run:
+| Pattern | Evidence |
+| --- | --- |
+| Repeated tool calls | The same normalized tool call recurring without useful new results. |
+| Semantic loops | The same intent in different words; opt-in embedding support. |
+| Stalls and no progress | Stagnant observations or runs that stop advancing. |
+| Repeated failures | Retryable errors versus likely permanent failures. |
+| Action and handoff cycles | Repeating action sequences or closed multi-agent handoff loops. |
+| Budget overruns | Configurable limits on steps and tool calls. |
 
-```python
-from loopguard import LoopGuardCallbackHandler
+[Detector details and configuration →](docs/README.md#configuration)
 
-handler = LoopGuardCallbackHandler(interrupt_on_fatal=False)
-result = agent.invoke(my_input, config={"callbacks": [handler]})
-
-for decision in handler.report()["decisions"]:
-    print(decision["action"], decision["risk_score"])
-```
-
-## Why LoopGuard
-
-LLM agents run in a loop: think, act, observe, repeat. Sometimes that loop goes wrong and
-the agent keeps spending steps without getting closer to the answer. Normal tracing can
-show what happened, but it often leaves the developer to decide whether the run is still
-useful.
-
-LoopGuard stays narrow: it turns the trace into stuck-risk decisions. It complements broad
-observability platforms rather than replacing them.
-
-## How It Works
+## How it works
 
 ```text
 Agent event -> Tracer -> Detectors -> DetectionSignals -> PolicyEngine -> GuardDecision
 ```
 
-| Part | Job | File |
-|------|-----|------|
-| Tracer | Records each agent event. | `loopguard/tracer.py` |
-| Metrics | Counts steps, tool calls, repeats, and common actions. | `loopguard/metrics.py` |
-| Detectors | Turn events into scored evidence signals. | `loopguard/detectors.py`, `loopguard/signals.py` |
-| Policy | Combines signals into continue/warn/replan/pause/stop decisions. | `loopguard/policy.py`, `loopguard/monitor.py` |
+Detectors collect evidence; the policy combines it into `CONTINUE`, `WARN`, `REPLAN`,
+`PAUSE`, or `STOP`. Repetition with stagnant output can stop a run, while useful new
+results allow it to continue. `REPLAN` and `PAUSE` are recorded recommendations today;
+automatic interruption happens only at `STOP`.
 
-Current detectors/signals:
+LoopGuard complements tracing tools by turning recorded events into runtime decisions.
 
-- `LoopDetector`: repeated normalized tool calls
-- `SemanticLoopDetector`: repeated intent in different words, using embeddings
-- `StallDetector` and `ProgressDetector`: stagnant observations and no progress
-- `RepeatedFailureDetector`: retryable vs likely permanent failures
-- `CycleDetector`: repeating action sequences
-- `HandoffLoopDetector`: closed multi-agent handoff cycles
-- Step/tool-call budget detectors
+[Architecture and detector reference →](docs/README.md#architecture-and-detectors)
 
-Detectors do not make the final execution decision alone. Repetition can warn; repetition
-plus stagnant output can stop.
+## Live runs and saved traces
 
-## Check Saved Traces
+Use the callback handler above for live runs. Reports include events, detector signals,
+policy decisions, metrics, and alerts. Observation-only mode is available with
+`LoopGuardCallbackHandler(interrupt_on_fatal=False)`.
 
-LoopGuard can analyze exported JSON traces without running the original agent:
+LoopGuard can also inspect an exported trace without running the original agent again.
+From a repository checkout:
 
 ```bash
 python -m loopguard.ingest examples/sample_trace.json
-python -m loopguard.ingest examples/sample_trace.json --json
-loopguard-ingest examples/sample_trace.json --json
 ```
 
-Use check mode for local scripts or CI-style pass/fail behavior:
+Use check mode for pass/fail behavior in scripts or CI:
 
 ```bash
 python -m loopguard.check examples/sample_trace.json
-python -m loopguard.check examples/sample_trace.json --fail-on stalled
-python -m loopguard.check examples/sample_trace.json --max-steps 20 --max-tool-calls 10
-python -m loopguard.check examples/sample_trace.json --config loopguard.yml
-python -m loopguard.check examples/sample_trace.json --fail-on looping --fail-on stalled --json
-loopguard-check examples/sample_trace.json --json
 ```
 
-By default, only `looping` fails the check. Use `--fail-on stalled` to fail on no-progress
-warnings too, or `--fail-on alerts` to fail on any alert. Step and tool-call budgets
-always fail the check when exceeded.
+[Saved trace analysis →](docs/README.md#saved-trace-analysis) · [Live integration and reports →](docs/README.md#live-integration-and-reports)
 
-The trace adapter is forgiving about field names such as `tool`, `tool_name`, `name`,
-`args`, `arguments`, `input`, `output`, `result`, `agent`, and `caller`.
+## Demo scenarios
 
-## Configuration
+| Scenario | What to watch |
+| --- | --- |
+| `exact`, `semantic` | Identical calls and paraphrased requests getting caught. |
+| `controlled_progress`, `controlled_503` | Useful polling and temporary failures recovering. |
+| `controlled_401`, `controlled_empty` | Permanent auth failures and repeated empty results. |
+| `calc`, `trap` | A real agent completing a task versus pursuing an impossible goal. |
 
-Keep local/live policy in a small `loopguard.yml`:
+The demo includes a FastAPI/WebSocket backend and a Next.js UI. The `exact` scenario
+runs offline; the others need model or embedding credentials.
 
-```yaml
-live:
-  max_steps: 40
-  max_tool_calls: 15
-  exact_threshold: 3
-  exact_window: 12
-  stall_patience: 4
-  stall_fatal: false
-  handoff_repeats: 2
-  handoff_window: 16
-  handoff_max_cycle_length: 5
-  handoff_fatal: true
-  semantic: false
+[Running the demo: installation, providers, and commands →](docs/README.md#running-the-demo)
 
-check:
-  fail_on:
-    - looping
-    - stalled
-  max_steps: 40
-  max_tool_calls: 15
-```
+## Evaluation
 
-For check-only config, top-level keys also work:
-
-```yaml
-fail_on:
-  - looping
-  - stalled
-max_steps: 40
-max_tool_calls: 15
-```
-
-Use config with the callback handler:
-
-```python
-from loopguard import LoopGuardCallbackHandler
-
-handler = LoopGuardCallbackHandler.from_config("loopguard.yml")
-agent.invoke(my_input, config={"callbacks": [handler]})
-```
-
-Set `semantic: true` to enable paraphrase-loop detection with embeddings. That path can
-use OpenAI or Gemini embeddings:
-
-```bash
-LOOPGUARD_EMBEDDING_PROVIDER=openai  # requires OPENAI_API_KEY
-LOOPGUARD_EMBEDDING_PROVIDER=gemini  # requires GOOGLE_API_KEY or GEMINI_API_KEY
-```
-
-## Local Demos
-
-[Watch the LoopGuard demo on YouTube](https://youtu.be/i5XRrvFoPA0).
-
-The repo includes a FastAPI/WebSocket backend, a Next.js + React Flow UI, and local demo
-scenarios:
-
-- `exact`: scripted identical tool loop, offline
-- `semantic`: scripted paraphrase loop, requires embeddings
-- `controlled_progress`: real ReAct agent, controlled pending -> processing -> completed tool responses
-- `controlled_503`: real ReAct agent, controlled 503 -> 503 -> success tool responses
-- `controlled_401`: real ReAct agent, controlled repeated auth failure
-- `controlled_empty`: real ReAct agent, controlled no-results loop
-- `calc`: real ReAct agent that finishes
-- `trap`: real ReAct agent given an impossible goal
-
-Screenshots:
-
-![Identical tool loop](ui/public/scriptedtool.png)
-![Paraphrase loop](ui/public/scriptedopenai.png)
-![Real agent finishing](ui/public/realagentmath.png)
-![Real agent caught in a loop](ui/public/realagentloop.png)
-
-Run the local demo stack:
-
-```bash
-git clone https://github.com/mahimathacker/loopguard.git
-cd loopguard
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-Set one model provider in `.env` for real-agent scenarios:
-
-```bash
-# OpenAI
-OPENAI_API_KEY=sk-...
-LOOPGUARD_MODEL_PROVIDER=openai
-LOOPGUARD_EMBEDDING_PROVIDER=openai
-
-# Gemini
-GOOGLE_API_KEY=...
-LOOPGUARD_MODEL_PROVIDER=gemini
-LOOPGUARD_GEMINI_MODEL=gemini-3.6-flash
-LOOPGUARD_EMBEDDING_PROVIDER=gemini
-```
-
-For a lower-cost Gemini demo model, try `gemini-3.5-flash-lite`.
-
-Terminal 1:
-
-```bash
-uvicorn server:app --reload --port 8000
-```
-
-Terminal 2:
-
-```bash
-cd ui
-npm install
-npm run dev
-```
-
-Open http://localhost:3000.
-
-Command-line demos:
-
-```bash
-python main.py            # exact, offline
-python main.py semantic   # semantic loop
-python main.py calc       # real agent, finishes
-python main.py trap       # real agent, loops and gets caught
-```
-
-## Evaluation And Tests
-
-The core test suite is offline and uses fake agents/fake embeddings:
+The core suite runs offline with fake agents and embeddings:
 
 ```bash
 python -m unittest discover -v
 ```
 
-The v0.2 fixture in `examples/v02_labeled_traces.json` covers healthy polling,
-pagination, retryable recovery, permanent failures, exact loops, alternating cycles, and
-multi-agent handoff cycles.
+The [v0.2 labeled traces](examples/v02_labeled_traces.json) cover healthy polling,
+pagination, retry recovery, permanent failures, exact loops, and action/handoff cycles.
+The evaluation harness reports detector precision, recall, and F1.
 
-The eval harness reports detector precision/recall/F1:
+[Evaluation setup and commands →](docs/README.md#evaluation-and-tests)
 
-```bash
-python -m loopguard.evals
-```
+## Documentation and contributing
 
-## Package Status
+Start with the [local guides](docs/README.md) for setup, configuration, saved traces,
+and the demo. These guides will move to Mintlify when the documentation site is ready.
 
-`loopguard-runtime` v0.2.1 is published on PyPI:
+For bugs, ideas, or contributions, [open an issue](https://github.com/mahimathacker/loopguard/issues)
+or submit a pull request. Include a reproducible trace when reporting detection problems
+and run the offline test suite for code changes.
 
-https://pypi.org/project/loopguard-runtime/0.2.1/
+[Roadmap →](docs/README.md#roadmap) · [Project structure →](docs/README.md#project-structure)
 
-The package builds cleanly with `python -m build`, passes `twine check`, and installs with:
+## Package status
 
-```bash
-pip install loopguard-runtime
-```
-
-## Roadmap
-
-LoopGuard is not trying to become a general tracing, dataset, eval, or monitoring
-platform. The next work is narrow:
-
-- Tune thresholds against real production traces.
-- Add clearer examples for healthy retries, polling, pagination, and cyclic failures.
-- Add GitHub check annotations for saved-trace failures.
-- Explore LangGraph.js/LangChain.js support later.
-
-## Project Structure
-
-```text
-agent-loop/
-  loopguard/
-    tracer.py         records events
-    metrics.py        derives trace metrics
-    signals.py        DetectionSignal, GuardDecision, GuardAction
-    policy.py         combines signals into runtime decisions
-    detectors.py      loop, progress, failure, cycle, budget, and handoff detectors
-    monitor.py        records events, collects signals, and stores decisions
-    guard.py          public LoopGuard wrapper for live runs
-    langgraph.py      callback handler for LangGraph/LangChain live runs
-    embeddings.py     OpenAI/Gemini embeddings for semantic detection
-    runner.py         stream_run helper
-    ingest.py         offline trace analyzer
-    check.py          saved-trace check command
-    evals.py          detector evaluation harness
-  examples/
-  server.py
-  main.py
-  ui/
-  requirements.txt
-  pyproject.toml
-```
+[loopguard-runtime v0.2.1](https://pypi.org/project/loopguard-runtime/0.2.1/) is an alpha
+release. Package metadata requires Python 3.11+ and lists Python 3.11 and 3.12 classifiers.
