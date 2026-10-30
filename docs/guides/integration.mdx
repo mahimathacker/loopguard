@@ -108,7 +108,8 @@ The helper uses default settings when you omit `config_path`.
 
 ## Use the stream wrapper for supported graph updates
 
-The local demo uses `LoopGuard.stream()` rather than callback injection:
+The demo backend and CLI call `stream_run()` directly. `LoopGuard.stream()` is
+the public SDK wrapper around that same runner:
 
 ```python
 from loopguard import LoopGuard
@@ -123,3 +124,6 @@ The wrapper interprets the scripted demo state fields and LangGraph message upda
 It reads the newest message and the first tool call in that message; it is not a
 general adapter for every possible graph state. Use callbacks to observe individual
 tool invocations or [saved traces](/guides/saved-traces) for exported runs.
+
+The [four visual examples](/demo/scenarios#run-the-visual-examples-through-the-sdk)
+pair UI captures with runnable Python SDK streams.

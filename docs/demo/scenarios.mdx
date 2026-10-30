@@ -1,14 +1,31 @@
 ---
 title: Demo scenarios
-description: Compare useful repetition, recoverable failures, and agents that should stop.
+description: Run the Python SDK behind the UI examples and compare healthy and stuck behavior.
 ---
 
 The demo uses the same runner for the command line and the UI. The scripted agents
 make detection easy to reproduce; the ReAct scenarios use a real model to choose
 tool calls. Controlled scenarios fix the tool responses, not the model's decisions.
 
+The four visual examples below connect what you see to actual Python SDK usage:
+exact repetition, semantic repetition, a healthy calculation, and an impossible
+search goal. The UI displays the SDK's events, signals, decisions, and final verdict;
+you can inspect those messages directly in Python without starting the UI server.
+
 Start with [local setup](/demo/running-locally). Then choose a scenario in the UI,
 or run `python main.py SCENARIO` from the repository root.
+
+## Run the visual examples through the SDK
+
+The SDK snippets use `LoopGuard.stream()`, the public wrapper around the runner
+used by the demo backend. `get_scenario()` supplies this repository's demo agent,
+detectors, and initial input. In your application, pass your own agent and input
+or use the [callback integration](/guides/integration).
+
+Run these snippets from the source checkout after
+[installing the demo dependencies](/demo/running-locally#set-up-the-checkout).
+They load the root `.env` just like the demo entry points. The `exact` example needs
+no credentials; check the requirements below before running the other three.
 
 ## What each run needs
 
@@ -43,6 +60,27 @@ evidence. The policy reaches `STOP`, and the graph turns red in the UI.
 This scenario uses `LoopDetector` and `StallDetector`, so its stop timing differs
 from the default callback example, which also includes `ProgressDetector`.
 
+**Python SDK:** run the same agent and detector mix, then inspect the evidence and
+policy decisions that the UI displays.
+
+```python
+from dotenv import load_dotenv
+from loopguard import LoopGuard
+from loopguard.scenarios import get_scenario
+
+load_dotenv(".env")
+_, agent, detectors, initial = get_scenario("exact")
+guard = LoopGuard(detectors=detectors)
+
+for message in guard.stream(agent, initial=initial):
+    if message["type"] in {"signal", "decision", "error", "done"}:
+        print(message)
+```
+
+The repeated calls first produce warning evidence. Stagnant output then combines
+with repetition to reach a `stop` decision; the final `done` message has
+`interrupted: True`.
+
 <Frame caption="Repository screenshot: identical searches and empty results ending in interruption.">
   <img src="/images/exact-loop.png" alt="LoopGuard UI showing repeated weather searches, no-results observations, a red graph, and an interrupted verdict" />
 </Frame>
@@ -60,6 +98,23 @@ same intent. Every search still comes back empty.
 
 **Expected behavior:** semantic similarity and stagnant results provide evidence
 for stopping. The embedding provider affects similarity scores and timing.
+
+**Python SDK:** select the paraphrasing agent and its embedding-backed detector.
+The `signal` messages expose the similarity evidence behind the screenshot's alert.
+
+```python
+from dotenv import load_dotenv
+from loopguard import LoopGuard
+from loopguard.scenarios import get_scenario
+
+load_dotenv(".env")
+_, agent, detectors, initial = get_scenario("semantic")
+guard = LoopGuard(detectors=detectors)
+
+for message in guard.stream(agent, initial=initial):
+    if message["type"] in {"signal", "decision", "error", "done"}:
+        print(message)
+```
 
 <Frame caption="Repository screenshot: semantic evidence catches repeated intent across different search phrases.">
   <img src="/images/semantic-loop.png" alt="LoopGuard UI displaying a semantic-loop alert, stagnant results, and a stopped paraphrasing search agent" />
@@ -142,6 +197,24 @@ returns an answer.
 **Expected behavior:** useful output lets the run finish without a fatal loop alert.
 This is the healthy comparison for the stuck search runs.
 
+**Python SDK:** the real agent gets a useful result and finishes. Inspect the
+decision stream and expect `interrupted: False` in the final `done` message when
+the task succeeds. Check for `error` messages separately.
+
+```python
+from dotenv import load_dotenv
+from loopguard import LoopGuard
+from loopguard.scenarios import get_scenario
+
+load_dotenv(".env")
+_, agent, detectors, initial = get_scenario("calc")
+guard = LoopGuard(detectors=detectors, recursion_limit=30)
+
+for message in guard.stream(agent, initial=initial):
+    if message["type"] in {"signal", "decision", "error", "done"}:
+        print(message)
+```
+
 <Frame caption="Repository screenshot: a calculation finishes with a useful tool result and no fatal loop alert.">
   <img src="/images/healthy-calculation.png" alt="LoopGuard UI showing a calculator result, the agent's final answer, and a successful completion verdict" />
 </Frame>
@@ -159,6 +232,24 @@ Its goal encourages it to keep refining its search.
 **Expected behavior:** the run can build repeated-intent and no-progress evidence
 and be interrupted. Real search output and model choices vary; do not treat the
 recorded demo as a fixed step-count guarantee.
+
+**Python SDK:** the same stream lets your application inspect why the search
+becomes suspicious. A policy stop produces `action: "stop"` followed by a `done`
+message with `interrupted: True` and a reason.
+
+```python
+from dotenv import load_dotenv
+from loopguard import LoopGuard
+from loopguard.scenarios import get_scenario
+
+load_dotenv(".env")
+_, agent, detectors, initial = get_scenario("trap")
+guard = LoopGuard(detectors=detectors, recursion_limit=30)
+
+for message in guard.stream(agent, initial=initial):
+    if message["type"] in {"signal", "decision", "error", "done"}:
+        print(message)
+```
 
 <Frame caption="Repository screenshot: the agent keeps searching for an impossible confirmation.">
   <img src="/images/stuck-agent.png" alt="A real search agent caught in a semantic loop while pursuing an impossible goal" />

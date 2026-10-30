@@ -104,6 +104,9 @@ All four images were copied unchanged from `ui/public/`; no screenshots were gen
 
 These captures show an older UI layout. Captions disclose that; they do not claim
 that current thresholds always stop at the counts displayed in those screenshots.
+Each of the four visual scenarios includes a runnable Python SDK example and an
+explanation of the messages behind the UI. The screenshots illustrate SDK behavior;
+the UI is one way to inspect it.
 
 ## Screenshot capture checklist
 

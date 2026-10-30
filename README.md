@@ -35,6 +35,8 @@ the actual decision.
 
 An agent keeps searching for an impossible confirmation. LoopGuard flags repeated
 intent and interrupts the demo. This repository capture shows an earlier UI layout.
+The [four visual examples](docs/demo/scenarios.mdx) pair detection explanations
+with Python SDK code so you can inspect the same behavior in your own program.
 
 [Watch the demo](https://youtu.be/i5XRrvFoPA0) · [Run it locally](docs/demo/running-locally.mdx)
 
