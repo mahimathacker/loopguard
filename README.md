@@ -36,7 +36,7 @@ the actual decision.
 An agent keeps searching for an impossible confirmation. LoopGuard flags repeated
 intent and interrupts the demo. This repository capture shows an earlier UI layout.
 
-[Watch the demo](https://youtu.be/i5XRrvFoPA0) ? [Run it locally](docs/demo/running-locally.mdx)
+[Watch the demo](https://youtu.be/i5XRrvFoPA0) · [Run it locally](docs/demo/running-locally.mdx)
 
 ## Quick example
 
@@ -68,7 +68,7 @@ LangChain must propagate callback errors, and the agent's tool-error handling mu
 let `LoopGuardInterrupt` escape. Use `interrupt_on_fatal=False` to collect reports
 without raising. `REPLAN` and `PAUSE` are recorded recommendations today.
 
-[Run a complete example without a model or API key ?](docs/getting-started.mdx)
+[Run a complete example without a model or API key →](docs/getting-started.mdx)
 
 ## What it detects
 
@@ -80,7 +80,7 @@ without raising. `REPLAN` and `PAUSE` are recorded recommendations today.
 | Action and handoff cycles | Repeating sequences or closed multi-agent handoffs. |
 | Budget overruns | Configurable limits on recorded steps and tool calls. |
 
-[Detection](docs/detection.mdx) ? [Configuration](docs/guides/configuration.mdx)
+[Detection](docs/detection.mdx) · [Configuration](docs/guides/configuration.mdx)
 
 ## How it works
 
@@ -91,7 +91,7 @@ Agent event -> Tracer -> Detectors -> Signals -> Policy -> Decision
 Repetition alone can warn; repetition plus no progress can stop. The policy combines
 signals into `CONTINUE`, `WARN`, `REPLAN`, `PAUSE`, or `STOP`.
 
-[How LoopGuard works ?](docs/how-it-works.mdx)
+[How LoopGuard works →](docs/how-it-works.mdx)
 
 ## Live runs and saved traces
 
@@ -106,7 +106,7 @@ python -m loopguard.check examples/sample_trace.json
 `ingest` reports findings; `check` gives pass/fail behavior for scripts or CI.
 The sample includes a loop, so its check exits with code `1`.
 
-[Integration guide](docs/guides/integration.mdx) ? [Saved traces](docs/guides/saved-traces.mdx)
+[Integration guide](docs/guides/integration.mdx) · [Saved traces](docs/guides/saved-traces.mdx)
 
 ## Demo scenarios
 
@@ -115,7 +115,7 @@ recovery, permanent 401 failures, empty results, and real calculation/search age
 Only `exact` runs without provider credentials; other scenarios need a model,
 embeddings, or both.
 
-[Scenario walkthroughs ?](docs/demo/scenarios.mdx)
+[Scenario walkthroughs →](docs/demo/scenarios.mdx)
 
 ## Evaluation
 
@@ -126,7 +126,7 @@ python -m unittest discover -v
 ```
 
 The repo also includes labeled progress-aware traces and a small detector evaluation
-harness. [Evaluation and its limits ?](docs/development/evaluation.mdx)
+harness. [Evaluation and its limits →](docs/development/evaluation.mdx)
 
 ## Documentation
 
@@ -143,4 +143,4 @@ release. Python 3.11+ is required; package classifiers list 3.11 and 3.12.
 Gemini support and controlled demo scenarios currently require the source checkout.
 JavaScript support and GitHub check annotations remain roadmap ideas.
 
-[Status and roadmap](docs/development/status.mdx) ? [Report an issue](https://github.com/mahimathacker/loopguard/issues)
+[Status and roadmap](docs/development/status.mdx) · [Report an issue](https://github.com/mahimathacker/loopguard/issues)
