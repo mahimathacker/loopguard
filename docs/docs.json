@@ -3,6 +3,10 @@
   "theme": "mint",
   "name": "LoopGuard",
   "description": "Detect stuck AI agents without treating every retry as a loop.",
+  "contextual": {
+    "options": ["chatgpt", "claude", "copy", "view"],
+    "display": "header"
+  },
   "markdown": {
     "instructions": [
       "LoopGuard is a Python runtime guardrail SDK. Install loopguard-runtime and import loopguard. Use /getting-started and /guides/integration for application code.",
