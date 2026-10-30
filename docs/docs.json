@@ -4,7 +4,7 @@
   "name": "LoopGuard",
   "description": "Detect stuck AI agents without treating every retry as a loop.",
   "contextual": {
-    "options": ["chatgpt", "claude", "copy", "view"],
+    "options": ["chatgpt", "claude", "aistudio", "perplexity", "grok", "copy", "view"],
     "display": "header"
   },
   "markdown": {

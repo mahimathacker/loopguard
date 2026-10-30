@@ -117,10 +117,11 @@ guidance. These generated routes return 404 in the local preview used here.
 The dashboard's **Don't index project** setting must be off for public discovery.
 Discovery files help tools find content; they do not guarantee indexing or citation.
 
-## Ask in ChatGPT or Claude
+## Ask in an external AI tool
 
-`docs.json` enables Mintlify's built-in `chatgpt`, `claude`, `copy`, and `view`
-context-menu actions in the page header. The first action is the primary button;
+`docs.json` enables Mintlify's built-in `chatgpt`, `claude`, `aistudio`, `perplexity`,
+`grok`, `copy`, and `view` context-menu actions in the page header. Google AI Studio
+is the supported entry point for Gemini. The first action is the primary button;
 the others appear in its dropdown. This setup uses external AI tools rather than
 Mintlify's paid embedded assistant. No model key or chat backend is added here.
 
@@ -129,7 +130,7 @@ copy of every repository file. The introduction explains how to include the
 published `llms.txt` or `llms-full.txt` for broader questions and how to copy a page
 when fetching is unavailable. The user's external AI account and its limits apply.
 
-After deployment, check both links on the real docs URL and confirm that the
+After deployment, check the links on the real docs URL and confirm that each
 provider can retrieve the page. Local preview links can be inspected, but external
 tools cannot fetch `localhost`. See
 [Mintlify's contextual menu documentation](https://www.mintlify.com/docs/ai/contextual-menu)
@@ -225,8 +226,9 @@ avoid clipping the later success out of the recovery capture.
 - Workflow syntax passed actionlint. The external-link checker passed against
   the actual public links. Strict release checking correctly failed on the three
   remaining reader-facing publication placeholders.
-- ChatGPT and Claude context-menu actions were checked at desktop and mobile
-  widths, including the generated page URLs and copy/Markdown alternatives.
+- ChatGPT, Claude, Google AI Studio, Perplexity, and Grok context-menu actions
+  were checked at desktop and mobile widths, including the generated page URLs
+  and copy/Markdown alternatives.
   External chat navigation was intercepted during verification; retrieval of a
   published page still needs a deployment check.
 
