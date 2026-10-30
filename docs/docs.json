@@ -23,12 +23,14 @@
         "pages": [
           "detection",
           "guides/integration",
-          "guides/configuration"
+          "guides/configuration",
+          "guides/saved-traces"
         ]
       },
       {
         "group": "Reference",
         "pages": [
+          "reference/cli",
           "reference/configuration"
         ]
       }

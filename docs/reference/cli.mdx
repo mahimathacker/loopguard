@@ -1,0 +1,98 @@
+---
+title: CLI reference
+description: Supported trace commands, flags, and exit behavior.
+---
+
+Install `loopguard-runtime` to use the trace commands. The installed console
+scripts are `loopguard-ingest` and `loopguard-check`; there is no `loopguard check`
+subcommand. Module commands below are equivalent and also work from a checkout.
+
+## Ingest
+
+Inspect one JSON file containing one or more runs:
+
+```bash
+python -m loopguard.ingest PATH [--json]
+loopguard-ingest PATH [--json]
+```
+
+| Argument or flag | Meaning |
+| --- | --- |
+| `PATH` | Required JSON trace file. |
+| `--json` | Print a machine-readable report instead of the text summary. |
+| `-h`, `--help` | Show help. |
+
+```bash
+python -m loopguard.ingest examples/sample_trace.json --json
+```
+
+Successful analysis exits `0`, regardless of findings. Invalid arguments use
+argparse's error behavior; file and parse errors can surface as Python exceptions.
+Use check mode when findings must fail a script.
+
+## Check
+
+Analyze one or more JSON files and apply failure rules and budgets:
+
+```bash
+python -m loopguard.check PATH [PATH ...] [OPTIONS]
+loopguard-check PATH [PATH ...] [OPTIONS]
+```
+
+| Argument or flag | Meaning |
+| --- | --- |
+| `PATH` | One or more required JSON trace files. |
+| `--config FILE` | Load JSON or simple YAML check settings. |
+| `--fail-on looping` | Fail if any replay reaches `STOP`; the default rule. |
+| `--fail-on stalled` | Fail if any run has stalled/warned status. |
+| `--fail-on alerts` | Fail if any run has any recorded alert. |
+| `--max-steps N` | Fail if a run has more than `N` exported steps. |
+| `--max-tool-calls N` | Fail if a run has more than `N` tool-call observations. |
+| `--json` | Print the combined machine-readable check report. |
+| `-h`, `--help` | Show help. |
+
+Repeat `--fail-on` to select multiple rules. Any provided `--fail-on` flags replace
+the configured/default rule set. Limits must be integers of at least `1`.
+
+```bash
+python -m loopguard.check examples/sample_trace.json --fail-on looping --fail-on stalled --max-steps 20 --max-tool-calls 10 --json
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | No matching failures or exceeded budgets. |
+| `1` | At least one matching failure or exceeded budget. |
+| `2` | Invalid arguments, unreadable input, invalid JSON, or config error. |
+
+Limits are per run, not totals across files. A budget violation fails even when no
+selected status matches. Trace processing uses the offline default detectors;
+there are no CLI flags for embedding providers or individual detector thresholds.
+
+## Evaluation harness
+
+From a checkout with `python-dotenv` installed:
+
+```bash
+python -m loopguard.evals
+```
+
+This module has no command-line options or installed console script. It prints
+the exact-detector fixture score and illustrative convergence scores. If
+`OPENAI_API_KEY` is set, it also runs provider-backed comparisons and an OpenAI
+judge example. See [evaluation and tests](/development/evaluation) before running
+it in an environment with credentials.
+
+## Repository demo
+
+From a checkout with the demo dependencies installed:
+
+```bash
+python main.py
+python main.py exact
+python main.py semantic
+python main.py controlled_503
+```
+
+`main.py` is a demo script with a positional scenario name, not an installed CLI.
+See [all eight scenarios](/demo/scenarios) and
+[local setup](/demo/running-locally).
